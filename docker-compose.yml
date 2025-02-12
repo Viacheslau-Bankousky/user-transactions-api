@@ -1,0 +1,31 @@
+version: '3'
+services:
+  fastapi:
+    build: .
+    command: uvicorn main:app --host 0.0.0.0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./app_volume/alembic/versions:/internship-task/alembic/versions
+      - ./app_volume/logs:/internship-task/logs/
+  db:
+    image: postgres
+    restart: always
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./db_volume/:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: internship-task_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      LOG_DESTINATION: stderr
+      LOGGING_COLLECTOR: "true"
+      LOG_DIRECTORY: /var/log/postgresql
+    env_file:
+      - .env

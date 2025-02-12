@@ -1,0 +1,19 @@
+from core.base_exception import BaseAPIException
+
+
+class TransactionNotExistsException(BaseAPIException): ...
+
+
+class TransactionDoesNotBelongToUserException(BaseAPIException): ...
+
+
+class CreateTransactionForBlockedUserException(BaseAPIException): ...
+
+
+class UpdateTransactionForBlockedUserException(BaseAPIException): ...
+
+
+class TransactionAlreadyRollbackedException(BaseAPIException): ...
+
+
+class NegativeBalanceException(BaseAPIException): ...

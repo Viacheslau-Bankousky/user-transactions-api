@@ -1,0 +1,15 @@
+[flake8]
+max-line-length = 79
+exclude = __init__.py, migrations
+ignore = D107,
+         E701,
+         WPS604,
+         WPS229,
+         WPS201,
+         WPS115,
+         Q000,
+         WPS235,
+         WPS305,
+         WPS358,
+         WPS226,
+         WPS407
