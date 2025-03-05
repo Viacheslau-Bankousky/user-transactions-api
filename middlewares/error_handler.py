@@ -35,7 +35,7 @@ class ErrorHandler:
     """
 
     @classmethod
-    async def handle_errors(
+    async def dispatch(
         cls,
         request: Request,
         call_next: Callable[[Request], Awaitable[Response]],
@@ -66,3 +66,7 @@ class ErrorHandler:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 error_message="Something went wrong on the server side",
             )
+
+
+async def execute_errors_handling(request, call_next) -> Response:
+    return await ErrorHandler.dispatch(request, call_next)

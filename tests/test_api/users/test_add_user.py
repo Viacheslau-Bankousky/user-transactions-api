@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, AsyncGenerator, Dict
 
 import pytest
 from fastapi import status
@@ -11,11 +11,15 @@ from tests.utils.assert_checkers import (
 
 
 @pytest.mark.asyncio
-async def test_can_add_user(async_client: AsyncClient) -> None:
+async def test_can_add_user(
+    overridden_dependency: AsyncGenerator, async_client: AsyncClient
+) -> None:
     new_user_data: Dict[str, str] = {
         "name": "new_user",
         "email": "new@user.com",
+        "password": "new_password",
     }
+    expected_user_id: int = 4
 
     response = await async_client.post(
         url="/users",
@@ -27,7 +31,7 @@ async def test_can_add_user(async_client: AsyncClient) -> None:
     assert response.status_code == status.HTTP_201_CREATED
     check_user_change_response(
         response_data=response_data,
-        expected_user_id=3,
+        expected_user_id=expected_user_id,
         expected_user_name="new_user",
         expected_email="new@user.com",
         expected_user_status=UserStatusEnum.ACTIVE,
@@ -36,7 +40,8 @@ async def test_can_add_user(async_client: AsyncClient) -> None:
 
 @pytest.mark.asyncio
 async def test_can_not_add_user_without_required_params(
-        async_client: AsyncClient,
+    overridden_dependency: AsyncGenerator,
+    async_client: AsyncClient,
 ) -> None:
     not_enough_params_to_add_user: Dict[str, str] = {"email": "new@user.com"}
 
@@ -53,11 +58,13 @@ async def test_can_not_add_user_without_required_params(
 
 @pytest.mark.asyncio
 async def test_can_not_add_the_same_user_twice(
-        async_client: AsyncClient,
+    overridden_dependency: AsyncGenerator,
+    async_client: AsyncClient,
 ) -> None:
     new_user_data: Dict[str, str] = {
         "name": "new_user",
         "email": "new@user.com",
+        "password": "new_password",
     }
 
     await async_client.post(

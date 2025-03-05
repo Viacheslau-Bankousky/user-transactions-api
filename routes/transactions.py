@@ -1,55 +1,250 @@
-# from typing import Annotated, AsyncContextManager
-#
-# from fastapi import APIRouter, Depends, status
-# from sqlalchemy.ext.asyncio import AsyncSession
-#
-# from database.db_session import get_session
-# from logger.logger_instance import app_logger
-# from models.user_data import User
-# from schemas.enums import UserStatusEnum
-# from schemas.request_models import RequestUserModel
-# from schemas.user_models import UserModel
-#
-# SESSION_DEPENDENCY = Annotated[
-#     AsyncContextManager[AsyncSession], Depends(get_session)
-# ]
-#
-# router = APIRouter()
-#
+from typing import Annotated, AsyncContextManager, List, Sequence, cast
 
-# @app.get(
-#     "/transactions",
-#     response_model=typing.Optional[list[TransactionModel]] | None,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def get_transactions(
-#     user_id: typing.Optional[int] = None,
-#     session_manager=Annotated[
-#         AsyncContextManager[AsyncSession], Depends(get_session)
-#     ],
-# ) -> typing.List[TransactionModel]:
-#     q = select(Transaction).order_by(Transaction.created.desc())
-#     if user_id:
-#         q = q.where(Transaction.user_id == user_id)
-#
-#     transactions = await session.execute(q)
-#     transactions = transactions.scalars()
-#     results = []
-#     for t in transactions:
-#         result = TransactionModel(
-#             **{
-#                 "id": t.id,
-#                 "user_id": t.user_id,
-#                 "currency": CurrencyEnum(t.currency),
-#                 "amount": t.amount,
-#                 "status": TransactionStatusEnum(t.status),
-#                 "created": t.created,
-#             }
-#         )
-#         results.append(result)
-#     return results
-#
-#
+from fastapi import APIRouter, Depends, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from authentication.user_management import check_user_has_token
+from core.database import get_session
+from core.logger_configuration import app_logger
+from models.transactions import Transaction
+from models.users import UserBalance
+from repositories.transactions import take_transactions
+from schemas.transactions import (
+    RequestTransactionModel,
+    TransactionModel,
+)
+from services.payment import process_payment
+from services.preconditions import (
+    ensure_valid_transaction,
+    ensure_valid_user_balance,
+)
+from services.refund import process_refund
+from services.rollback import make_roll_back
+from validators.transactions import (
+    check_transaction_status,
+    check_transactions_exist,
+)
+
+SESSION_DEPENDENCY = Annotated[
+    AsyncContextManager[AsyncSession], Depends(get_session)
+]
+
+router = APIRouter()
+
+
+@router.get(
+    "/transactions",
+    response_model=Sequence[TransactionModel] | None,
+    status_code=status.HTTP_200_OK,
+    description="Get all transactions",
+    response_description="All transactions returned successfully",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def get_transactions(
+    session_manager: SESSION_DEPENDENCY,
+):
+    app_logger.info("Received GET request for /transactions endpoint")
+    async with session_manager as session:
+        transactions: Sequence[Transaction] = await take_transactions(
+            session=session,
+        )
+        check_transactions_exist(transactions=transactions)
+        transactions = cast(Sequence[Transaction], transactions)
+        app_logger.info(
+            f"Fetched {len(transactions)} transactions from database"
+        )
+        return transactions
+
+
+@router.get(
+    "/users/{user_id:int}/transactions",
+    response_model=Sequence[TransactionModel] | None,
+    status_code=status.HTTP_200_OK,
+    description="Get transactions by user id",
+    response_description="Transactions returned successfully",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def get_transaction_by_user_id(
+    session_manager: SESSION_DEPENDENCY,
+    user_id: int,
+):
+    app_logger.info(
+        f"Received GET request for /users/{user_id}/" f"transactions endpoint"
+    )
+    async with session_manager as session:
+        transactions: Sequence[Transaction] = await take_transactions(
+            session=session,
+            user_id=user_id,
+        )
+        check_transactions_exist(transactions=transactions)
+        transactions = cast(Sequence[Transaction], transactions)
+        app_logger.info(
+            f"Fetched {len(transactions)} transactions from database"
+        )
+        return transactions
+
+
+@router.get(
+    "/transactions/{current_status:str}",
+    response_model=Sequence[TransactionModel] | None,
+    status_code=status.HTTP_200_OK,
+    description="Get transactions by status",
+    response_description="Transactions returned successfully",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def get_transaction_by_status(
+    session_manager: SESSION_DEPENDENCY,
+    current_status: str,
+):
+    app_logger.info(
+        f"Received GET request for /transactions/" f"{current_status} endpoint"
+    )
+    check_transaction_status(transaction_status=current_status)
+    async with session_manager as session:
+        transactions: Sequence[Transaction] = await take_transactions(
+            session=session,
+            status=current_status,
+        )
+        check_transactions_exist(transactions=transactions)
+        transactions = cast(Sequence[Transaction], transactions)
+        app_logger.info(
+            f"Fetched {len(transactions)} transactions from database"
+        )
+        return transactions
+
+
+@router.get(
+    "/users/{user_id:int}/transactions/{current_status:str}",
+    response_model=List[TransactionModel] | None,
+    status_code=status.HTTP_200_OK,
+    description="Get transactions by user id and status",
+    response_description="Transactions returned successfully",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def get_transaction_by_user_id_and_status(
+    session_manager: SESSION_DEPENDENCY,
+    user_id: int,
+    current_status: str,
+):
+    app_logger.info(
+        f"Received GET request for /users/{user_id}"
+        f"/transactions/{current_status}"
+    )
+    check_transaction_status(transaction_status=current_status)
+    async with session_manager as session:
+        transactions: Sequence[Transaction] = await take_transactions(
+            session=session,
+            user_id=user_id,
+            status=current_status,
+        )
+        check_transactions_exist(transactions=transactions)
+        transactions = cast(Sequence[Transaction], transactions)
+        app_logger.info(
+            f"Fetched {len(transactions)} transactions from database"
+        )
+        return transactions
+
+
+@router.post(
+    "/users/{user_id:int}/transactions/refund",
+    response_model=TransactionModel,
+    status_code=status.HTTP_201_CREATED,
+    description="Create top up transaction",
+    response_description="Top up transaction created successfully",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def add_top_up_transaction(  # noqa: WPS210
+    session_manager: SESSION_DEPENDENCY,
+    user_id: int,
+    transaction_data: RequestTransactionModel,
+):
+    app_logger.info(
+        f"Received POST request for /users/{user_id}/"
+        "transactions/refund endpoint "
+    )
+    async with session_manager as session:
+        transaction: Transaction = await process_refund(
+            session=session,
+            user_id=user_id,
+            transaction_data=transaction_data,
+        )
+        app_logger.info(
+            f"Topping up transaction ID={transaction.id} "
+            f"for user ID={user_id} processed successfully."
+        )
+        return transaction
+
+
+@router.post(
+    "/users/{user_id:int}/transactions/deduct",
+    response_model=TransactionModel,
+    status_code=status.HTTP_201_CREATED,
+    description="Create deduct transaction",
+    response_description="Deduct transaction created successfully",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def add_deduct_transaction(  # noqa: WPS210
+    session_manager: SESSION_DEPENDENCY,
+    user_id: int,
+    transaction_data: RequestTransactionModel,
+):
+    app_logger.info(
+        f"Received POST request for /users/{user_id}"
+        f"/transactions/deduct/ endpoint "
+    )
+    async with session_manager as session:
+        new_transaction: Transaction = await process_payment(
+            session=session,
+            user_id=user_id,
+            transaction_data=transaction_data,
+        )
+        app_logger.info(
+            f"Withdrawal transaction ID={new_transaction.id} "
+            f"for user ID={user_id} processed successfully."
+        )
+        return new_transaction
+
+
+@router.patch(
+    "/users/{user_id:int}/transactions/{transaction_id:int}",
+    response_model=TransactionModel | None,
+    status_code=status.HTTP_200_OK,
+    description="Rollback transaction",
+    response_description="Transaction rollbacked successfully",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def rollback_transaction(
+    session_manager: SESSION_DEPENDENCY,
+    user_id: int,
+    transaction_id: int,
+):
+    app_logger.info(
+        f"Received PATCH request for /users/{user_id}/"
+        f"transactions/{transaction_id} endpoint"
+    )
+    async with session_manager as session:
+        user_transaction: Transaction = await ensure_valid_transaction(
+            session=session,
+            user_id=user_id,
+            transaction_id=transaction_id,
+        )
+        user_balance: UserBalance = await ensure_valid_user_balance(
+            session=session,
+            currency=user_transaction.currency,
+            user_id=user_id,
+        )
+        roll_backed_transaction: Transaction = await make_roll_back(
+            session=session,
+            transaction=user_transaction,
+            user_balance=user_balance,
+        )
+    app_logger.info(
+        f"Transaction with ID {transaction_id} for user with ID {user_id}"
+        f" roll backed successfully"
+    )
+    return roll_backed_transaction
+
+
 # @app.get(
 #     "/transactions/analysis",
 #     response_model=typing.Optional[list] | None,
@@ -125,149 +320,3 @@
 #         dt_gt -= datetime.timedelta(weeks=1)
 #         dt_lt -= datetime.timedelta(weeks=1)
 #     return results
-
-# @app.post(
-#     "/{user_id}/transactions",
-#     response_model=typing.Optional[TransactionModel] | None,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def post_transaction(
-#     user_id: int,
-#     transaction: RequestTransactionModel,
-#     session: AsyncSession = Depends(get_async_session),
-# ):
-#     if user_id < 0:
-#         raise BadRequestDataException(
-#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-#             detail="Unprocessable data in request",
-#         )
-#     if transaction.currency not in {str(x) for x in CurrencyEnum}:
-#         raise BadRequestDataException(
-#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-#             detail="Currency does not exist",
-#         )
-#     if transaction.amount == 0:
-#         raise BadRequestDataException(
-#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-#             detail="Transaction can not have zero amount",
-#         )
-#
-#     db_user = await session.execute(select(User).where(User.id == user_id))
-#     db_user = db_user.scalar()
-#     if not db_user:
-#         raise UserNotExistsException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User with id=`{0}` does not exist".format(user_id),
-#         )
-#     if db_user.status != "ACTIVE":
-#         raise CreateTransactionForBlockedUserException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User with id=`{0}` is blocked".format(user_id),
-#         )
-#
-#     db_user_balance = await session.execute(
-#         select(UserBalance).where(
-#             (UserBalance.user_id == user_id)
-#             & (UserBalance.currency == transaction.currency)
-#         )
-#     )
-#     db_user_balance = db_user_balance.scalar()
-#     if float(db_user_balance.amount) + transaction.amount < 0:
-#         raise NegativeBalanceException(
-#             status_code=status.HTTP_400_BAD_REQUEST, detail="Negative balance"
-#         )
-#
-#     await session.execute(
-#         update(UserBalance)
-#         .values(**{"amount": transaction.amount})
-#         .where(UserBalance.id == db_user_balance.id)
-#     )
-#     await session.commit()
-#     await session.execute(
-#         insert(Transaction).values(
-#             **{
-#                 "user_id": db_user.id,
-#                 "currency": transaction.currency,
-#                 "amount": transaction.amount,
-#                 "status": "PROCESSED",
-#                 "created": datetime.utcnow(),
-#             }
-#         )
-#     )
-#     await session.commit()
-#
-# @app.patch(
-#     "/{user_id}/transactions/{transaction_id}",
-#     response_model=typing.Optional[TransactionModel] | None,
-# )
-# async def patch_rollback_transaction(
-#     user_id: int,
-#     transaction_id: int,
-#     session: AsyncSession = Depends(get_async_session),
-# ):
-#     if user_id < 0 or transaction_id < 0:
-#         raise BadRequestDataException(
-#             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-#             detail="Unprocessable data in request",
-#         )
-#     db_user = await session.execute(select(User).where(User.id == user_id))
-#     db_user = db_user.scalar()
-#     if not db_user:
-#         raise UserNotExistsException(
-#             status_code=status.HTTP_404_NOT_FOUND,
-#             detail="User with id=`{0}` does not exist".format(user_id),
-#         )
-#     db_transaction = await session.execute(
-#         select(Transaction).where(Transaction.id == transaction_id)
-#     )
-#     db_transaction = db_transaction.scalar()
-#     if not db_transaction:
-#         raise TransactionNotExistsException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="Transaction with id=`{0}` does not exist".format(transaction_id),
-#         )
-#     if db_transaction.user_id != db_user.id:
-#         raise TransactionDoesNotBelongToUserException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="Transaction with id=`{0}` does not belong to user with id=`{1}`".format(
-#                 transaction_id, user_id
-#             ),
-#         )
-#     if db_transaction.status == "ROLLBACKED":
-#         raise TransactionAlreadyRollbackedException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="Transaction with id=`{0}` is already rollbacked".format(
-#                 transaction_id
-#             ),
-#         )
-#     if db_user.status == "BLOCKED":
-#         raise UpdateTransactionForBlockedUserException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="User with id=`{0}` is blocked".format(user_id),
-#         )
-#
-#     db_user_balance = await session.execute(
-#         select(UserBalance).where(
-#             (UserBalance.user_id == user_id)
-#             & (UserBalance.currency == db_transaction.currency)
-#         )
-#     )
-#     db_user_balance = db_user_balance.scalar()
-#     new_amount = float(db_user_balance.amount)
-#     if db_transaction.amount < 0:
-#         new_amount += abs(float(db_transaction.amount))
-#     else:
-#         new_amount -= float(db_transaction.amount)
-#     if new_amount < 0:
-#         raise NegativeBalanceException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail=f"Negative balance: {new_amount}",
-#         )
-#     await session.execute(
-#         update(UserBalance)
-#         .values(**{"amount": new_amount})
-#         .where(UserBalance.id == db_user_balance.id)
-#     )
-#     await session.commit()
-#     await session.execute(update(Transaction).values(**{"status": "ROLLBACKED"}))
-#     await session.commit()

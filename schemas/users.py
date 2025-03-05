@@ -2,19 +2,25 @@ from datetime import datetime
 from typing import List
 
 from pydantic import EmailStr, field_validator
-from pydantic.v1 import root_validator
 
+from authentication.security import pwd_context
 from core.pydantic_base import BasePydanticModel
-from models.enums import CurrencyEnum, UserStatusEnum
+from models.enums import UserStatusEnum
+from schemas.user_balances import ResponseUserBalanceModel
 
 
 class RequestUserModel(BasePydanticModel):
     name: str
     email: EmailStr
+    password: str
 
     @field_validator("name", "email", mode="before")
     def strip_spaces(cls, user_value: str) -> str:
         return user_value.strip()
+
+    @field_validator("password", mode="before")
+    def validate_password(cls, password: str) -> str:
+        return pwd_context.hash(password)
 
 
 class RequestUserUpdateModel(BasePydanticModel):
@@ -29,25 +35,6 @@ class UserModel(BasePydanticModel):
     email: str | None
     status: UserStatusEnum
     created: datetime
-
-
-class UserBalanceModel(BasePydanticModel):
-    id: int | None = None
-    user_id: int | None = None
-    currency: CurrencyEnum | None = None
-    amount: float | None = None
-
-    @root_validator(pre=True)
-    def validate_not_negative(self, user_data):
-        if "amount" in user_data and user_data.get("amount"):
-            if user_data["amount"] < 0:
-                raise ValueError("Amount cannot be negative")
-
-        return user_data
-
-class ResponseUserBalanceModel(BasePydanticModel):
-    currency: CurrencyEnum | None = None
-    amount: float | None = None
 
 
 class ResponseUserModel(BasePydanticModel):

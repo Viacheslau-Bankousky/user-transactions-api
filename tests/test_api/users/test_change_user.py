@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, AsyncGenerator, Dict, List
 
 import pytest
 from fastapi import status
@@ -13,7 +13,8 @@ from tests.utils.assert_checkers import (
 
 @pytest.mark.asyncio
 async def test_can_change_all_user_data(
-        async_client: AsyncClient,
+    overridden_dependency: AsyncGenerator,
+    async_client: AsyncClient,
 ) -> None:
     all_changing_params_for_user: Dict[str, str] = {
         "name": "updated_user",
@@ -39,7 +40,9 @@ async def test_can_change_all_user_data(
 
 
 @pytest.mark.asyncio
-async def test_can_change_user_name(async_client: AsyncClient) -> None:
+async def test_can_change_user_name(
+    overridden_dependency: AsyncGenerator, async_client: AsyncClient
+) -> None:
     user_name_changing_params: Dict[str, str] = {"name": "updated_user"}
 
     response = await async_client.patch(
@@ -54,14 +57,15 @@ async def test_can_change_user_name(async_client: AsyncClient) -> None:
         response_data=response_data,
         expected_user_id=2,
         expected_user_name="updated_user",
-        expected_email="last@user.com",
+        expected_email="second@user.com",
         expected_user_status=UserStatusEnum.ACTIVE,
     )
 
 
 @pytest.mark.asyncio
 async def test_can_change_user_email(
-        async_client: AsyncClient,
+    overridden_dependency: AsyncGenerator,
+    async_client: AsyncClient,
 ) -> None:
     user_email_changing_params: Dict[str, str] = {"email": "updated@user.com"}
 
@@ -76,7 +80,7 @@ async def test_can_change_user_email(
     check_user_change_response(
         response_data=response_data,
         expected_user_id=2,
-        expected_user_name="last_user",
+        expected_user_name="second_user",
         expected_email="updated@user.com",
         expected_user_status=UserStatusEnum.ACTIVE,
     )
@@ -84,7 +88,8 @@ async def test_can_change_user_email(
 
 @pytest.mark.asyncio
 async def test_can_change_user_status(
-        async_client: AsyncClient,
+    overridden_dependency: AsyncGenerator,
+    async_client: AsyncClient,
 ) -> None:
     user_status_changing_params: Dict[str, str] = {"status": "BLOCKED"}
 
@@ -99,15 +104,16 @@ async def test_can_change_user_status(
     check_user_change_response(
         response_data=response_data,
         expected_user_id=2,
-        expected_user_name="last_user",
-        expected_email="last@user.com",
+        expected_user_name="second_user",
+        expected_email="second@user.com",
         expected_user_status=UserStatusEnum.BLOCKED,
     )
 
 
 @pytest.mark.asyncio
 async def test_can_not_change_nonexistent_user(
-        async_client: AsyncClient,
+    overridden_dependency: AsyncGenerator,
+    async_client: AsyncClient,
 ) -> None:
     all_changing_params_for_user: Dict[str, str] = {
         "name": "updated_user",
@@ -128,7 +134,8 @@ async def test_can_not_change_nonexistent_user(
 
 @pytest.mark.asyncio
 async def test_can_not_change_user_using_invalid_status(
-        async_client: AsyncClient,
+    overridden_dependency: AsyncGenerator,
+    async_client: AsyncClient,
 ) -> None:
     incorrect_changing_params_for_user: Dict[str, str] = {
         "status": "incorrect_status"

@@ -2,11 +2,11 @@
 name = "task"
 version = "0.1.0"
 description = ""
-authors = ["Author <author@gmail.com>"]
+authors = ["Author <viacheslau.bankousky@gmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = ">=3.11, <3.13"
+python = ">=3.11,<4.0"
 uvicorn = "^0.23.2"
 httpx = "^0.25.0"
 fastapi = "^0.115.6"
@@ -16,6 +16,9 @@ alembic = "^1.14.1"
 asyncpg = "^0.30.0"
 pydantic = {extras = ["email"], version = "^2.10.6"}
 pydantic-settings = "^2.7.1"
+pyjwt = "^2.10.1"
+passlib = "^1.7.4"
+python-multipart = "^0.0.20"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -37,6 +40,7 @@ flake8-docstrings = "^1.7.0"
 pydocstyle = "^6.3.0"
 flake8-bugbear = "^24.12.12"
 darglint = "^1.8.1"
+types-passlib = "^1.7.7.20241221"
 
 
 [build-system]
@@ -53,3 +57,8 @@ profile = "black"
 ignore_missing_imports = true
 strict_optional = true
 disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:'crypt' is deprecated"
+]

@@ -10,6 +10,7 @@ currencies, ensuring that each user can only have one balance per currency.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import List
 
 from sqlalchemy import ForeignKey
@@ -20,11 +21,14 @@ from sqlalchemy.orm import (
 )
 from sqlalchemy.sql.schema import UniqueConstraint
 from sqlalchemy.types import Enum as SQLAlchemyEnum
+from sqlalchemy.types import Numeric
 
-from core.constants import DEFAULT_AMOUNT
+from core.constants import PRECISION, SCALE
 from core.models import Base  # type: ignore
 from models.enums import CurrencyEnum, UserStatusEnum
 from models.transactions import Transaction
+
+DEFAULT_AMOUNT: Decimal = Decimal(0)
 
 
 class User(Base):
@@ -41,6 +45,7 @@ class User(Base):
         user_balance (Mapped[List["UserBalance"]]): Relationship with the
         UserBalance table. Stores all balances belonging to this user.
         user_transactions (Mapped[List["Transaction"]]): Relationship with the
+        password (Mapped[str]): The user's password.'
         Transaction table. Stores all transactions related to this user.
     """
 
@@ -60,6 +65,7 @@ class User(Base):
     user_transactions: Mapped[List[Transaction]] = relationship(  # type: ignore # noqa: F821, E501
         back_populates="owner", cascade="all, delete-orphan"
     )
+    password: Mapped[str] = mapped_column(nullable=False)
 
 
 class UserBalance(Base):
@@ -90,9 +96,13 @@ class UserBalance(Base):
     currency: Mapped[CurrencyEnum] = mapped_column(
         SQLAlchemyEnum(CurrencyEnum), nullable=False
     )
-    amount: Mapped[float] = mapped_column(default=DEFAULT_AMOUNT)
-    created: Mapped[datetime] = mapped_column(default=datetime.now())
-    owner: Mapped["User"] = relationship(back_populates="user_balance")
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(precision=PRECISION, scale=SCALE), default=DEFAULT_AMOUNT
+    )
+    created: Mapped[datetime] = mapped_column(default=datetime.now)
+    owner: Mapped["User"] = relationship(
+        back_populates="user_balance", lazy="joined"
+    )
 
     __table_args__ = (
         UniqueConstraint(

@@ -1,3 +1,59 @@
+from typing import Sequence, Tuple
+
+from sqlalchemy import Result, Select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models.enums import TransactionStatusEnum
+from models.transactions import Transaction
+from repositories.query_builder import prepare_filtered_query
+from schemas.transactions import RequestTransactionModel
+
+
+async def take_transactions(
+    session: AsyncSession, **filter_params
+) -> Sequence[Transaction]:
+    query: Select[Tuple[Transaction]] = prepare_filtered_query(
+        model=Transaction, **filter_params
+    )
+    transactions: Result[Tuple[Transaction]] = await session.execute(query)
+    return transactions.scalars().all()
+
+
+async def create_transaction(
+    session: AsyncSession,
+    transaction_data: RequestTransactionModel,
+    user_id: int,
+) -> Transaction:
+    transaction = Transaction(
+        user_id=user_id, **transaction_data.model_dump()
+    )
+    session.add(transaction)
+    await session.flush()
+
+    return transaction
+
+
+async def take_transaction(
+    session: AsyncSession, **filter_params
+) -> Transaction | None:
+    query: Select[Tuple[Transaction]] = prepare_filtered_query(
+        model=Transaction, **filter_params
+    )
+    transaction: Result[Tuple[Transaction]] = await session.execute(query)
+    return transaction.scalars().first()
+
+
+async def roll_back_transaction(
+    session: AsyncSession,
+    transaction: Transaction,
+) -> Transaction:
+    transaction.status = TransactionStatusEnum.ROLL_BACKED
+    session.add(transaction)
+    await session.flush()
+
+    return transaction
+
+
 # async def get_transactions_count(
 #     session: AsyncSession, dt_gt: date, dt_lt: date
 # ):

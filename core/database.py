@@ -46,7 +46,6 @@ from core.logger_configuration import app_logger
 
 engine: AsyncEngine = create_async_engine(
     settings.db_url,
-    echo=True,
 )
 
 AsyncSessionMaker: Callable[..., AsyncSession] = async_sessionmaker(

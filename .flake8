@@ -12,4 +12,6 @@ ignore = D107,
          WPS305,
          WPS358,
          WPS226,
-         WPS407
+         WPS407,
+         W503,
+         WPS118

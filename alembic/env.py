@@ -45,7 +45,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from core.base_settings import DB_PASSWORD, DB_USER  # type: ignore
+from core.base_settings import settings  # type: ignore
 from core.models import Base  # type: ignore
 
 config = context.config
@@ -111,7 +111,7 @@ async def run_async_migrations() -> None:
     if url is not None:
         config.set_main_option(
             "sqlalchemy.url",
-            url.format(DB_USER, DB_PASSWORD),
+            url.format(settings.DB_USER, settings.DB_PASSWORD),
         )
         connectable = async_engine_from_config(
             config.get_section(config.config_ini_section, {}),

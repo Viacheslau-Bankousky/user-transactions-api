@@ -11,8 +11,12 @@ Attributes:
 
 from fastapi import FastAPI
 
+from routes.authentication import router as auth_router
+from routes.transactions import router as transaction_router
 from routes.users import router as user_router
 
 testing_app = FastAPI()
 
 testing_app.include_router(user_router)
+testing_app.include_router(transaction_router)
+testing_app.include_router(auth_router)

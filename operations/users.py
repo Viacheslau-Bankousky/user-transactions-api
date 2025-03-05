@@ -5,9 +5,7 @@ These utilities are used to transform database objects into client-facing
 models and to streamline query filtering for users.
 """
 
-from typing import Sequence, Tuple
-
-from sqlalchemy import Select
+from typing import Sequence
 
 from models.users import User
 from schemas.users import ResponseUserBalanceModel, ResponseUserModel
@@ -76,29 +74,3 @@ def map_user_to_response_model(
             for balance in user.user_balance
         ],
     )
-
-
-def apply_filters(
-    query: Select[Tuple[User]], **filter_params
-) -> Select[Tuple[User]]:
-    """
-    Apply filters to an SQLAlchemy query based on the provided parameters.
-
-    Args:
-        query (Select[Tuple[User]]): The SQLAlchemy query to which the filters
-            will be applied.
-        **filter_params: Arbitrary keyword arguments representing column
-            filters.
-            The keys must correspond to `User` model attributes, and the values
-            should be the filter criteria.
-
-    Returns:
-        Select[Tuple[User]]: The filtered SQLAlchemy query.
-    """
-    for query_param, query_param_value in filter_params.items():
-        if query_param_value:
-            query = query.filter(
-                getattr(User, query_param) == query_param_value
-            )
-
-    return query
