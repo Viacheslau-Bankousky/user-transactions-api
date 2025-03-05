@@ -1,19 +1,20 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Dict, List, Set, cast
-from core.constants import DEFAULT_AMOUNT
+
 from models.enums import UserStatusEnum
 
-BALANCES: List[Dict[str, str | float]] = [
-    {"currency": "USD", "amount": DEFAULT_AMOUNT},
-    {"currency": "EUR", "amount": DEFAULT_AMOUNT},
-    {"currency": "AUD", "amount": DEFAULT_AMOUNT},
-    {"currency": "CAD", "amount": DEFAULT_AMOUNT},
-    {"currency": "ARS", "amount": DEFAULT_AMOUNT},
-    {"currency": "PLN", "amount": DEFAULT_AMOUNT},
-    {"currency": "BTC", "amount": DEFAULT_AMOUNT},
-    {"currency": "ETH", "amount": DEFAULT_AMOUNT},
-    {"currency": "DOGE", "amount": DEFAULT_AMOUNT},
-    {"currency": "USDT", "amount": DEFAULT_AMOUNT},
+BALANCES: List[Dict[str, str]] = [
+    {"currency": "USD", "amount": "0.00"},
+    {"currency": "EUR", "amount": "0.00"},
+    {"currency": "AUD", "amount": "0.00"},
+    {"currency": "CAD", "amount": "0.00"},
+    {"currency": "ARS", "amount": "0.00"},
+    {"currency": "PLN", "amount": "0.00"},
+    {"currency": "BTC", "amount": "0.00"},
+    {"currency": "ETH", "amount": "0.00"},
+    {"currency": "DOGE", "amount": "0.00"},
+    {"currency": "USDT", "amount": "0.00"},
 ]
 
 
@@ -22,12 +23,13 @@ def check_get_user_response_assertation(
     expected_user_id: int,
     expected_user_name: str,
     expected_email: str,
+    expected_user_status: UserStatusEnum,
 ) -> None:
     assert response_data["id"] == expected_user_id
     assert response_data["name"] == expected_user_name
     assert response_data["email"] == expected_email
     validate_datetime_format(response_data["created"])
-    assert response_data["status"] == UserStatusEnum.ACTIVE
+    assert response_data["status"] == expected_user_status
     check_balance(response_data=response_data)
 
 
@@ -50,13 +52,13 @@ def check_balance(response_data: List[Dict] | Dict) -> None:
 
 
 def check_currency_response_assertation(
-    response_data: Dict[str, str | float | List],
+    response_data: Dict[str, str | List],
     expected_currencies: Set,
     expected_money_sum: Set,
 ) -> None:
     assert "balances" in response_data.keys()
     user_balances = cast(
-        List[Dict[str, str | float]], response_data.get("balances")
+        List[Dict[str, str]], response_data.get("balances")
     )
     estimated_currencies = {
         balance.get("currency") for balance in user_balances
@@ -87,3 +89,19 @@ def check_user_change_response(
     assert response_data["email"] == expected_email
     validate_datetime_format(response_data["created"])
     assert response_data["status"] == expected_user_status
+
+
+def check_transaction_response_assertation(
+    response_data: Dict,
+    expected_amount: Decimal,
+    expected_currency: str,
+    expected_user_id: int,
+    expected_status: str,
+    expected_purpose: str,
+) -> None:
+    assert response_data["user_id"] == expected_user_id
+    assert response_data["amount"] == expected_amount
+    assert response_data["currency"] == expected_currency
+    assert response_data["status"] == expected_status
+    validate_datetime_format(response_data["created"])
+    assert response_data["purpose"] == expected_purpose

@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     DB_USER: str | None = None
     DB_PASSWORD: str | None = None
     ENVIRONMENT: str = "Production"
+    SECRET_KEY: str | None = None
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8"
     )

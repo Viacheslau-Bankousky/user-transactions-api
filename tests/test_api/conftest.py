@@ -5,11 +5,18 @@ This module defines an asynchronous pytest fixture that automatically adds
 new users to the system before each test function.
 """
 
+from typing import AsyncGenerator
+
 import pytest_asyncio
-from utils.test_data_setup import add_balances, add_users
+from sqlalchemy import select
 
-from models.users import User
+from authentication.user_management import check_user_has_token
+from models.users import User, UserBalance
+from tests.common.app_for_testing import testing_app as test_app
+from tests.utils.mocks import mock_token_dependency
+from tests.utils.test_data_setup import add_balances, add_users
 
+USER_ID = USER_BALANCE_ID = 1
 
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def users(async_db_session) -> None:
@@ -27,3 +34,20 @@ async def users(async_db_session) -> None:
     """
     new_users: list[User] = await add_users(async_db_session)
     await add_balances(async_db_session, new_users)
+
+
+@pytest_asyncio.fixture
+async def overridden_dependency() -> AsyncGenerator:
+    test_app.dependency_overrides[check_user_has_token] = mock_token_dependency
+    yield
+    test_app.dependency_overrides = {}
+
+
+@pytest_asyncio.fixture
+async def initial_user_balance(async_db_session) -> UserBalance:
+    query = select(UserBalance).where(
+        UserBalance.id == USER_BALANCE_ID,
+        UserBalance.user_id == USER_ID,
+    )
+    user_balance = await async_db_session.execute(query)
+    return user_balance.scalar_one()

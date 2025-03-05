@@ -7,16 +7,15 @@ The routes utilize FastAPI framework and integrate with SQLAlchemy for
 database interactions and custom exception handling for error scenarios.
 """
 
-from typing import Annotated, AsyncContextManager, Sequence
+from typing import Annotated, AsyncContextManager, Sequence, cast
 
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.constants import NOTHING_WAS_FOUND_MESSAGE
+from authentication.user_management import check_user_has_token
 from core.database import get_session
 from core.logger_configuration import app_logger
-from exceptions.users import UserNotFoundException
-from models.users import User, UserStatusEnum
+from models.users import User
 from operations.users import (
     serialize_user_to_response,
     serialize_users_to_response,
@@ -28,6 +27,7 @@ from schemas.users import (
     ResponseUserModel,
     UserModel,
 )
+from validators.users import check_user_exists, validate_user_status
 
 SESSION_DEPENDENCY = Annotated[
     AsyncContextManager[AsyncSession],
@@ -43,6 +43,7 @@ router = APIRouter()
     status_code=status.HTTP_200_OK,
     description="Get all users",
     response_description="All users returned successfully",
+    dependencies=[Depends(check_user_has_token)],
 )
 async def get_all_users(
     session_manager: SESSION_DEPENDENCY,
@@ -76,6 +77,7 @@ async def get_all_users(
     status_code=status.HTTP_200_OK,
     description="Get user by email or id",
     response_description="User returned successfully",
+    dependencies=[Depends(check_user_has_token)],
 )
 async def get_user(
     session_manager: SESSION_DEPENDENCY,
@@ -95,22 +97,14 @@ async def get_user(
 
     Returns:
         ResponseUserModel | None: The serialized user's details.
-
-    Raises:
-        UserNotFoundException: If the user with the provided ID is not
-            found.
     """
     app_logger.info(
         f"Received GET request for /users endpoint" f" by id {user_id}",
     )
     async with session_manager as session:
         user: User | None = await take_user(session=session, id=user_id)
-        if not user:
-            app_logger.info(NOTHING_WAS_FOUND_MESSAGE)
-            raise UserNotFoundException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                message=NOTHING_WAS_FOUND_MESSAGE,
-            )
+        check_user_exists(user=user)
+        user = cast(User, user)
         app_logger.info("Fetched a user from database")
         return serialize_user_to_response(data_to_process=user)
 
@@ -121,6 +115,7 @@ async def get_user(
     status_code=status.HTTP_200_OK,
     description="Get users by name",
     response_description="User returned successfully",
+    dependencies=[Depends(check_user_has_token)],
 )
 async def get_users_by_name(
     session_manager: SESSION_DEPENDENCY,
@@ -140,10 +135,6 @@ async def get_users_by_name(
 
     Returns:
         ResponseUserModel | None: The serialized user's details.
-
-    Raises:
-        UserNotFoundException: If the user with the provided name is
-            not found.
     """
     app_logger.info("Received GET request for /users endpoint by name")
     async with session_manager as session:
@@ -151,12 +142,8 @@ async def get_users_by_name(
             session=session,
             name=user_name,
         )
-        if not user:
-            app_logger.info(NOTHING_WAS_FOUND_MESSAGE)
-            raise UserNotFoundException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                message=NOTHING_WAS_FOUND_MESSAGE,
-            )
+        check_user_exists(user=user)
+        user = cast(User, user)
         app_logger.info("Fetched a user from database")
         return serialize_user_to_response(data_to_process=user)
 
@@ -167,6 +154,7 @@ async def get_users_by_name(
     status_code=status.HTTP_200_OK,
     description="Get users by status",
     response_description="Users returned successfully",
+    dependencies=[Depends(check_user_has_token)],
 )
 async def get_users_by_status(
     session_manager: SESSION_DEPENDENCY,
@@ -187,18 +175,9 @@ async def get_users_by_status(
     Returns:
         Sequence[ResponseUserModel]: A list of serialized users with
             the specified status.
-
-    Raises:
-        UserNotFoundException: If users with the provided status are
-            not found.
     """
     app_logger.info("Received GET request for /users endpoint by status")
-    if user_status not in UserStatusEnum:
-        app_logger.info("Invalid status value was passed:")
-        raise UserNotFoundException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            message=NOTHING_WAS_FOUND_MESSAGE,
-        )
+    validate_user_status(user_status=user_status)
     async with session_manager as session:
         users: Sequence[User] = await take_users(
             session=session,
@@ -218,6 +197,7 @@ async def get_users_by_status(
     description="Create user",
     response_model=UserModel,
     response_description="User created successfully",
+    dependencies=[Depends(check_user_has_token)],
 )
 async def post_user(
     session_manager: SESSION_DEPENDENCY,
@@ -252,6 +232,7 @@ async def post_user(
     status_code=status.HTTP_200_OK,
     description="Update user",
     response_description="User updated successfully",
+    dependencies=[Depends(check_user_has_token)],
 )
 async def patch_user(
     session_manager: SESSION_DEPENDENCY,
@@ -273,9 +254,6 @@ async def patch_user(
 
     Returns:
         UserModel | None: The updated user's details.
-
-    Raises:
-        UserNotFoundException: If the user with the given ID is not found.
     """
     app_logger.info(
         f"Received PATCH request for /users endpoint by id {user_id}",
@@ -286,11 +264,7 @@ async def patch_user(
             user_id=user_id,
             user_data=user,
         )
-        if not updated_user:
-            app_logger.info(NOTHING_WAS_FOUND_MESSAGE)
-            raise UserNotFoundException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                message=NOTHING_WAS_FOUND_MESSAGE,
-            )
+        check_user_exists(user=updated_user)
+        updated_user = cast(User, updated_user)
         app_logger.info(f"User with id {user_id} was updated successfully")
         return updated_user

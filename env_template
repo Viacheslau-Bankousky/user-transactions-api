@@ -1,3 +1,4 @@
 DB_USER=name of database user (example - Alehandro)
 DB_PASSWORD=user's password to database (example - 1234567)
 ENVIRONMENT=your current working environment Production/Testing (Production by default)
+SECRET_KEY=string for JWT encrypting

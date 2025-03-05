@@ -11,6 +11,7 @@ cryptocurrencies.
 - `TransactionStatusEnum`: Represents the possible statuses of a transaction
 in the system.
 """
+
 from enum import StrEnum
 
 
@@ -78,3 +79,8 @@ class TransactionStatusEnum(StrEnum):
 
     PROCESSED = "PROCESSED"
     ROLL_BACKED = "ROLL_BACKED"
+
+
+class TransactionPurposeEnum(StrEnum):
+    REFUND = "REFUND"
+    WITHDRAWAL = "WITHDRAWAL"

@@ -12,35 +12,15 @@ and modern application design.
 from typing import Sequence, Tuple
 
 from fastapi import status
-from sqlalchemy import Result, Select, Update, select, update
+from sqlalchemy import Result, Select, Update, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import subqueryload
 
 from exceptions.users import UserAlreadyExistsException
 from models.users import User, UserBalance
-from operations.users import apply_filters
+from repositories.query_builder import prepare_filtered_query
 from schemas.transactions import CurrencyEnum
 from schemas.users import RequestUserModel, RequestUserUpdateModel
-
-
-def prepare_filtered_user_query(**filter_params) -> Select[Tuple[User]]:
-    """
-    Prepare a filtered SQLAlchemy query for retrieving users.
-
-    Args:
-        filter_params: Arbitrary keyword arguments representing filters
-                        to be applied to the query.
-
-    Returns:
-        Select[Tuple[User]]: A filtered SQLAlchemy query for selecting users.
-    """
-    initial_query: Select[Tuple[User]] = select(User)
-    modified_query: Select[Tuple[User]] = build_query(
-        query=initial_query,
-        **filter_params,
-    )
-    return modified_query
 
 
 async def take_users(session: AsyncSession, **filter_params) -> Sequence[User]:
@@ -56,7 +36,9 @@ async def take_users(session: AsyncSession, **filter_params) -> Sequence[User]:
     Returns:
         Sequence[User]: A list of users matching the specified filters.
     """
-    query: Select[Tuple[User]] = prepare_filtered_user_query(**filter_params)
+    query: Select[Tuple[User]] = prepare_filtered_query(
+        model=User, **filter_params
+    )
     users: Result[Tuple[User]] = await session.execute(query)
     return users.scalars().all()
 
@@ -75,36 +57,11 @@ async def take_user(session: AsyncSession, **filter_params) -> User | None:
            User | None: The user matching the specified filters,
                 or None if no user is found.
     """
-    query: Select[Tuple[User]] = prepare_filtered_user_query(**filter_params)
+    query: Select[Tuple[User]] = prepare_filtered_query(
+        model=User, **filter_params
+    )
     user: Result[Tuple[User]] = await session.execute(query)
     return user.scalars().first()
-
-
-def build_query(
-    query: Select[Tuple[User]],
-    **filter_params,
-) -> Select[Tuple[User]]:
-    """
-    Modify a SQLAlchemy query by applying filters and ordering.
-
-    Args:
-        query (Select[Tuple[User]]): The initial SQLAlchemy query object.
-        filter_params: Arbitrary keyword arguments representing filters
-            to be applied to the query.
-
-    Returns:
-        Select[Tuple[User]]: The modified query with applied filters and
-            ordering.
-    """
-    if filter_params:
-        query = apply_filters(query=query, **filter_params)
-    ordered_query = query.order_by(User.created.desc()).options(
-        subqueryload(User.user_balance).load_only(
-            UserBalance.currency,
-            UserBalance.amount,
-        ),
-    )
-    return ordered_query
 
 
 async def create_user(session: AsyncSession, user: RequestUserModel) -> User:
@@ -134,7 +91,7 @@ async def create_user(session: AsyncSession, user: RequestUserModel) -> User:
             message="User already exists",
         )
     user_balance = [
-        UserBalance(user_id=new_user.id, currency=currency.value)
+        UserBalance(user_id=new_user.id, currency=currency)
         for currency in CurrencyEnum
     ]
     session.add_all(user_balance)
@@ -179,8 +136,7 @@ async def update_user(
 #     registered_users = await session.execute(q)
 #     registered_users = registered_users.fetchall()
 #     return len(registered_users)
-#
-#
+
 # async def get_registered_and_deposit_users_count(
 #     session: AsyncSession, dt_gt: date, dt_lt: date
 # ):
