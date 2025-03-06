@@ -9,17 +9,22 @@ The module supports asynchronous database operations to ensure scalability
 and modern application design.
 """
 
+from datetime import date
 from typing import Sequence, Tuple
 
 from fastapi import status
-from sqlalchemy import Result, Select, Update, update
+from sqlalchemy import Result, Select, Update, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from exceptions.users import UserAlreadyExistsException
+from models.transactions import Transaction
 from models.users import User, UserBalance
-from repositories.query_builder import prepare_filtered_query
-from schemas.transactions import CurrencyEnum
+from repositories.query_builder import (
+    get_date_range_filter,
+    prepare_filtered_query,
+)
+from schemas.transactions import CurrencyEnum, TransactionPurposeEnum
 from schemas.users import RequestUserModel, RequestUserUpdateModel
 
 
@@ -127,34 +132,31 @@ async def update_user(
     return updated_user.scalars().first()
 
 
-# async def get_registered_users_count(
-#     session: AsyncSession, dt_gt: date, dt_lt: date
-# ):
-#     q = select(User).where(
-#         (func.date(User.created >= dt_gt)) & (func.date(User.created) <= dt_lt)
-#     )
-#     registered_users = await session.execute(q)
-#     registered_users = registered_users.fetchall()
-#     return len(registered_users)
+async def get_registered_users_count(
+    session: AsyncSession, dt_gt: date, dt_lt: date
+) -> int:
+    query: Select = select(func.count(User.id)).where(
+        get_date_range_filter(date_from=dt_gt, date_to=dt_lt, model=User)
+    )
+    users_result: Result = await session.execute(query)
+    users_count: int = users_result.scalar()
+    return users_count
 
-# async def get_registered_and_deposit_users_count(
-#     session: AsyncSession, dt_gt: date, dt_lt: date
-# ):
-#     result = 0
-#     q = select(User).where(
-#         (func.date(User.created) >= dt_gt) & (func.date(User.created) <= dt_lt)
-#     )
-#     registered_users = await session.execute(q)
-#     registered_users = registered_users.scalars()
-#     for user in registered_users:
-#         q = select(Transaction).where(
-#             (func.date(Transaction.created) >= dt_gt)
-#             & (func.date(Transaction.created) <= dt_lt)
-#             & (Transaction.user_id == user.id)
-#             & (Transaction.amount > 0)
-#         )
-#         deposits = await session.execute(q)
-#         deposits = deposits.fetchall()
-#         if len(deposits) > 0:
-#             result += 1
-#     return result
+
+async def get_registered_and_deposit_users_count(
+    session: AsyncSession, dt_gt: date, dt_lt: date
+) -> int:
+    query: Select = (
+        select(func.count(User.id))
+        .join(Transaction, User.id == Transaction.user_id)
+        .where(
+            get_date_range_filter(date_from=dt_gt, date_to=dt_lt, model=User),
+            get_date_range_filter(
+                date_from=dt_gt, date_to=dt_lt, model=Transaction
+            ),
+            Transaction.purpose == TransactionPurposeEnum.REFUND,
+        )
+    )
+    users_result: Result = await session.execute(query)
+    users_count: int = users_result.scalar()
+    return users_count

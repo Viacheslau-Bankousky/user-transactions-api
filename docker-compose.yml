@@ -7,9 +7,12 @@ services:
       - "8000:8000"
     depends_on:
       - db
+      - rabbitmq
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
     volumes:
       - ./app_volume/alembic/versions:/internship-task/alembic/versions
       - ./app_volume/logs:/internship-task/logs/
@@ -27,5 +30,16 @@ services:
       LOG_DESTINATION: stderr
       LOGGING_COLLECTOR: "true"
       LOG_DIRECTORY: /var/log/postgresql
+  rabbitmq:
+    image: rabbitmq:3-management
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
+    volumes:
+      - ./rabbitmq_volume:/var/lib/rabbitmq
     env_file:
       - .env

@@ -1,8 +1,10 @@
+from datetime import date
 from typing import Tuple, TypeVar
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import subqueryload
 from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import BinaryExpression
 
 from models.transactions import Transaction
 from models.users import User, UserBalance
@@ -65,3 +67,11 @@ def apply_filters(
             )
 
     return query
+
+
+def get_date_range_filter(
+    date_from: date, date_to: date, model: type[ModelType]
+) -> BinaryExpression:
+    return (func.date(model.created) >= date_from) & (
+        func.date(model.created) <= date_to
+    )
