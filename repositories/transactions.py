@@ -1,11 +1,17 @@
-from typing import Sequence, Tuple
+from datetime import date
+from decimal import Decimal
+from typing import List, Sequence, Tuple
 
-from sqlalchemy import Result, Select
+from sqlalchemy import Result, Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import BinaryExpression
 
-from models.enums import TransactionStatusEnum
+from models.enums import TransactionPurposeEnum, TransactionStatusEnum
 from models.transactions import Transaction
-from repositories.query_builder import prepare_filtered_query
+from repositories.query_builder import (
+    get_date_range_filter,
+    prepare_filtered_query,
+)
 from schemas.transactions import RequestTransactionModel
 
 
@@ -24,9 +30,7 @@ async def create_transaction(
     transaction_data: RequestTransactionModel,
     user_id: int,
 ) -> Transaction:
-    transaction = Transaction(
-        user_id=user_id, **transaction_data.model_dump()
-    )
+    transaction = Transaction(user_id=user_id, **transaction_data.model_dump())
     session.add(transaction)
     await session.flush()
 
@@ -54,86 +58,51 @@ async def roll_back_transaction(
     return transaction
 
 
-# async def get_transactions_count(
-#     session: AsyncSession, dt_gt: date, dt_lt: date
-# ):
-#     q = select(Transaction).where(
-#         (func.date(Transaction.created) >= dt_gt)
-#         & (func.date(Transaction.created) <= dt_lt)
-#     )
-#     transactions = await session.execute(q)
-#     transactions = transactions.fetchall()
-#     return len(transactions)
-#
-#
-# async def get_not_rollbacked_transactions_count(
-#     session: AsyncSession, dt_gt: date, dt_lt: date
-# ):
-#     q = select(Transaction).where(
-#         (func.date(Transaction.created) >= dt_gt)
-#         & (func.date(Transaction.created) <= dt_lt)
-#         & (Transaction.status != "ROLLBACKED")
-#     )
-#     transactions = await session.execute(q)
-#     transactions = transactions.fetchall()
-#     return len(transactions)
+async def get_transactions_count(
+    session: AsyncSession, dt_gt: date, dt_lt: date
+) -> int:
+    query: Select = select(func.count(Transaction.id)).where(
+        get_date_range_filter(
+            date_from=dt_gt, date_to=dt_lt, model=Transaction
+        )
+    )
+    transactions_result: Result = await session.execute(query)
+    transactions_count: int = transactions_result.scalar()
+    return transactions_count
 
-# async def get_not_rollbacked_withdraw_amount(
-#     session: AsyncSession, dt_gt: date, dt_lt: date
-# ):
-#     q = select(Transaction).where(
-#         (func.date(Transaction.created) >= dt_gt)
-#         & (func.date(Transaction.created) <= dt_lt)
-#         & (Transaction.amount < 0)
-#         & (Transaction.status != "ROLLBACKED")
-#     )
-#     not_rollbacked_withdraws = await session.execute(q)
-#     not_rollbacked_withdraws = not_rollbacked_withdraws.scalars()
-#     return sum(
-#         [
-#             x.amount * EXCHANGE_RATES_TO_USD[x.currency]
-#             for x in not_rollbacked_withdraws
-#         ]
-#     )
-#
-# async def get_registered_and_not_rollbacked_deposit_users_count(
-#     session: AsyncSession, dt_gt: date, dt_lt: date
-# ):
-#     result = 0
-#     q = select(User).where(
-#         (func.date(User.created >= dt_gt)) & (func.date(User.created) <= dt_lt)
-#     )
-#     registered_users = await session.execute(q)
-#     registered_users = registered_users.scalars()
-#     for user in registered_users:
-#         q = select(Transaction).where(
-#             (func.date(Transaction.created) >= dt_gt)
-#             & (func.date(Transaction.created) <= dt_lt)
-#             & (Transaction.user_id == user.id)
-#             & (Transaction.amount > 0)
-#             & (Transaction.status != "ROLLBACKED")
-#         )
-#         not_rollbacked_deposits = await session.execute(q)
-#         not_rollbacked_deposits = not_rollbacked_deposits.fetchall()
-#         if len(not_rollbacked_deposits) > 0:
-#             result += 1
-#     return result
-#
-#
-# async def get_not_rollbacked_deposit_amount(
-#     session: AsyncSession, dt_gt: date, dt_lt: date
-# ):
-#     q = select(Transaction).where(
-#         (func.date(Transaction.created) >= dt_gt)
-#         & (func.date(Transaction.created) <= dt_lt)
-#         & (Transaction.amount > 0)
-#         & (Transaction.status != "ROLLBACKED")
-#     )
-#     not_rollbacked_deposits = await session.execute(q)
-#     not_rollbacked_deposits = not_rollbacked_deposits.scalars()
-#     return sum(
-#         [
-#             x.amount * EXCHANGE_RATES_TO_USD[x.currency]
-#             for x in not_rollbacked_deposits
-#         ]
-#     )
+
+async def get_not_rollbacked_transactions_count(
+    session: AsyncSession, dt_gt: date, dt_lt: date
+) -> int:
+    query: Select = select(func.count(Transaction.id)).where(
+        get_date_range_filter(
+            date_from=dt_gt, date_to=dt_lt, model=Transaction
+        ),
+        Transaction.status != TransactionStatusEnum.ROLL_BACKED,
+    )
+    transactions_result: Result = await session.execute(query)
+    transactions_count: int = transactions_result.scalar()
+    return transactions_count
+
+
+async def get_not_rollbacked_transactions_amount(
+    session: AsyncSession,
+    dt_gt: date,
+    dt_lt: date,
+    transaction_purpose: TransactionPurposeEnum,
+) -> Decimal:
+    conditions: List[BinaryExpression] = [
+        get_date_range_filter(
+            date_from=dt_gt, date_to=dt_lt, model=Transaction
+        ),
+        Transaction.status != TransactionStatusEnum.ROLL_BACKED,
+    ]
+    if transaction_purpose == TransactionPurposeEnum.REFUND:
+        conditions.append(Transaction.purpose == transaction_purpose)
+    elif transaction_purpose == TransactionPurposeEnum.WITHDRAWAL:
+        conditions.append(Transaction.purpose == transaction_purpose)
+
+    query: Select = select(func.sum(Transaction.amount)).where(*conditions)
+    transactions_result: Result = await session.execute(query)
+    transactions_amount: Decimal | None = transactions_result.scalar()
+    return transactions_amount if transactions_amount else Decimal(0)

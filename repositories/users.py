@@ -10,14 +10,16 @@ and modern application design.
 """
 
 from datetime import date
-from typing import Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 from fastapi import status
 from sqlalchemy import Result, Select, Update, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import BinaryExpression
 
 from exceptions.users import UserAlreadyExistsException
+from models.enums import TransactionStatusEnum
 from models.transactions import Transaction
 from models.users import User, UserBalance
 from repositories.query_builder import (
@@ -143,19 +145,28 @@ async def get_registered_users_count(
     return users_count
 
 
-async def get_registered_and_deposit_users_count(
-    session: AsyncSession, dt_gt: date, dt_lt: date
+async def get_users_count_with_filters(
+    session: AsyncSession,
+    dt_gt: date,
+    dt_lt: date,
+    exclude_rollbacked: bool = False,
 ) -> int:
+    conditions: List[BinaryExpression] = [
+        get_date_range_filter(date_from=dt_gt, date_to=dt_lt, model=User),
+        get_date_range_filter(
+            date_from=dt_gt, date_to=dt_lt, model=Transaction
+        ),
+        Transaction.purpose == TransactionPurposeEnum.REFUND,
+    ]
+    if exclude_rollbacked:
+        conditions.append(
+            Transaction.status != TransactionStatusEnum.ROLL_BACKED
+        )
+
     query: Select = (
         select(func.count(User.id))
         .join(Transaction, User.id == Transaction.user_id)
-        .where(
-            get_date_range_filter(date_from=dt_gt, date_to=dt_lt, model=User),
-            get_date_range_filter(
-                date_from=dt_gt, date_to=dt_lt, model=Transaction
-            ),
-            Transaction.purpose == TransactionPurposeEnum.REFUND,
-        )
+        .where(*conditions)
     )
     users_result: Result = await session.execute(query)
     users_count: int = users_result.scalar()
