@@ -1,5 +1,7 @@
+from datetime import date, timedelta
 from typing import Annotated, AsyncContextManager, List, Sequence, cast
 
+from celery import chain, group
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,6 +11,7 @@ from core.logger_configuration import app_logger
 from models.transactions import Transaction
 from models.users import UserBalance
 from repositories.transactions import take_transactions
+from schemas.statistic import ResponseStatisticModel
 from schemas.transactions import (
     RequestTransactionModel,
     TransactionModel,
@@ -20,6 +23,18 @@ from services.preconditions import (
 )
 from services.refund import process_refund
 from services.rollback import make_roll_back
+from statistic.tasks.processing import create_statistic_response
+from statistic.tasks.transactions import (
+    calculate_not_rollbacked_deposit_amount,
+    calculate_not_rollbacked_transactions,
+    calculate_not_rollbacked_withdraw_amount,
+    calculate_transactions,
+)
+from statistic.tasks.users import (
+    calculate_registered_and_deposit_users,
+    calculate_registered_and_not_rollbacked_deposit_users,
+    calculate_registered_users,
+)
 from validators.transactions import (
     check_transaction_status,
     check_transactions_exist,
@@ -245,22 +260,30 @@ async def rollback_transaction(
     return roll_backed_transaction
 
 
-# @app.get(
-#     "/transactions/analysis",
-#     response_model=typing.Optional[list] | None,
-#     status_code=status.HTTP_200_OK,
-# )
-# async def get_transaction_analysis(
-#     session_manager=Annotated[
-#         AsyncContextManager[AsyncSession], Depends(get_session)
-#     ],
-# ) -> typing.List[dict]:
-#     dt_gt = (
-#         datetime.utcnow().date()
-#         - datetime.timedelta(weeks=1)
-#         + datetime.timedelta(days=1)
-#     )
-#     dt_lt = datetime.utcnow().date()
+@router.get(
+    "/transactions/analysis/period/{weeks_count:int}",
+    response_model=Sequence[ResponseStatisticModel],
+    status_code=status.HTTP_200_OK,
+    description="Show statistics about transactions.",
+    response_description="Statistics returned successfully.",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def get_transaction_analysis(weeks_count: int):
+    start_date: date = date.today() - timedelta(weeks=weeks_count)
+    dt_gt: date = start_date
+    dt_lt: date = start_date + timedelta(days=6)
+    results: List[ResponseStatisticModel] = []
+    while dt_lt <= date.today():
+        tasks_chain = chain(
+            group(calculate_transactions.s(dt_gt, dt_lt)),
+            calculate_not_rollbacked_transactions.s(dt_gt, dt_lt))
+
+        # dt_gt = (
+    #     datetime.utcnow().date()
+    #     - datetime.timedelta(weeks=1)
+    #     + datetime.timedelta(days=1)
+    # )
+    # dt_lt = datetime.utcnow().date()
 #     results = []
 #     for i in range(52):
 #         registered_users_count = await get_registered_users_count(
