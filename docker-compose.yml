@@ -41,5 +41,20 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
     volumes:
       - ./rabbitmq_volume:/var/lib/rabbitmq
+  celery:
+    build: .
+    command: celery -A statistic.worker worker --pool=asyncio --loglevel=INFO
+    working_dir: /internship-task
+    depends_on:
+      - rabbitmq
+      - db
+    environment:
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      RABBIT_USER: ${RABBIT_USER}
+      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
     env_file:
       - .env
+    volumes:
+      - .:/internship-task/
+

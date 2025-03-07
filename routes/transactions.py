@@ -23,7 +23,8 @@ from services.preconditions import (
 )
 from services.refund import process_refund
 from services.rollback import make_roll_back
-from statistic.tasks.processing import create_statistic_response
+from statistic.execution import execute_tasks_chain
+from statistic.tasks.responses import create_statistic_response
 from statistic.tasks.transactions import (
     calculate_not_rollbacked_deposit_amount,
     calculate_not_rollbacked_transactions,
@@ -35,6 +36,7 @@ from statistic.tasks.users import (
     calculate_registered_and_not_rollbacked_deposit_users,
     calculate_registered_users,
 )
+from validators.statisctic import check_weeks_count
 from validators.transactions import (
     check_transaction_status,
     check_transactions_exist,
@@ -269,77 +271,30 @@ async def rollback_transaction(
     dependencies=[Depends(check_user_has_token)],
 )
 async def get_transaction_analysis(weeks_count: int):
+    check_weeks_count(weeks_count=weeks_count)
     start_date: date = date.today() - timedelta(weeks=weeks_count)
     dt_gt: date = start_date
     dt_lt: date = start_date + timedelta(days=6)
-    results: List[ResponseStatisticModel] = []
+    statistic_results: List[ResponseStatisticModel] = []
     while dt_lt <= date.today():
         tasks_chain = chain(
-            group(calculate_transactions.s(dt_gt, dt_lt)),
-            calculate_not_rollbacked_transactions.s(dt_gt, dt_lt))
+            group(
+                calculate_registered_users.s(dt_gt, dt_lt),
+                calculate_registered_and_deposit_users.s(dt_gt, dt_lt),
+                calculate_registered_and_not_rollbacked_deposit_users.s(
+                    dt_gt, dt_lt
+                ),
+                calculate_transactions.s(dt_gt, dt_lt),
+                calculate_not_rollbacked_transactions.s(dt_gt, dt_lt),
+                calculate_not_rollbacked_deposit_amount.s(dt_gt, dt_lt),
+                calculate_not_rollbacked_withdraw_amount.s(dt_gt, dt_lt),
+            ),
+            create_statistic_response.s(dt_gt, dt_lt),
+        )
+        await execute_tasks_chain(
+            tasks_chain=tasks_chain, statistic_results=statistic_results
+        )
+        dt_gt += timedelta(days=7)
+        dt_lt += timedelta(days=7)
 
-        # dt_gt = (
-    #     datetime.utcnow().date()
-    #     - datetime.timedelta(weeks=1)
-    #     + datetime.timedelta(days=1)
-    # )
-    # dt_lt = datetime.utcnow().date()
-#     results = []
-#     for i in range(52):
-#         registered_users_count = await get_registered_users_count(
-#             session, dt_gt=dt_gt, dt_lt=dt_lt
-#         )
-#         registered_and_deposit_users_count = (
-#             await get_registered_and_deposit_users_count(
-#                 session, dt_gt=dt_gt, dt_lt=dt_lt
-#             )
-#         )
-#         registered_and_not_rollbacked_deposit_users_count = (
-#             await get_registered_and_not_rollbacked_deposit_users_count(
-#                 session, dt_gt=dt_gt, dt_lt=dt_lt
-#             )
-#         )
-#         not_rollbacked_deposit_amount = (
-#             await get_not_rollbacked_deposit_amount(
-#                 session, dt_gt=dt_gt, dt_lt=dt_lt
-#             )
-#         )
-#         not_rollbacked_withdraw_amount = (
-#             await get_not_rollbacked_withdraw_amount(
-#                 session, dt_gt=dt_gt, dt_lt=dt_lt
-#             )
-#         )
-#         transactions_count = await get_transactions_count(
-#             session, dt_gt=dt_gt, dt_lt=dt_lt
-#         )
-#         not_rollbacked_transactions_count = (
-#             await get_not_rollbacked_transactions_count(
-#                 session, dt_gt=dt_gt, dt_lt=dt_lt
-#             )
-#         )
-#         result = {
-#             "start_date": dt_gt,
-#             "end_date": dt_lt,
-#             "registered_users_count": registered_users_count,
-#             "registered_and_deposit_users_count": registered_and_deposit_users_count,
-#             "registered_and_not_rollbacked_deposit_users_count": registered_and_not_rollbacked_deposit_users_count,
-#             "not_rollbacked_deposit_amount": not_rollbacked_deposit_amount,
-#             "not_rollbacked_withdraw_amount": not_rollbacked_withdraw_amount,
-#             "transactions_count": transactions_count,
-#             "not_rollbacked_transactions_count": not_rollbacked_transactions_count,
-#         }
-#         for field in (
-#             "registered_users_count",
-#             "registered_and_deposit_users_count",
-#             "registered_and_not_rollbacked_deposit_users_count",
-#             "not_rollbacked_deposit_amount",
-#             "not_rollbacked_withdraw_amount",
-#             "transactions_count",
-#             "not_rollbacked_transactions_count",
-#         ):
-#             if result[field] > 0:
-#                 results.append(result)
-#                 break
-#         dt_gt -= datetime.timedelta(weeks=1)
-#         dt_lt -= datetime.timedelta(weeks=1)
-#     return results
+    return statistic_results

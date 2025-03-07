@@ -197,7 +197,7 @@ async def get_users_by_status(
     description="Create user",
     response_model=UserModel,
     response_description="User created successfully",
-    dependencies=[Depends(check_user_has_token)],
+    # dependencies=[Depends(check_user_has_token)],
 )
 async def post_user(
     session_manager: SESSION_DEPENDENCY,

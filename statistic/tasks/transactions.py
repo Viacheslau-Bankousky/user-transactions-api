@@ -9,7 +9,7 @@ from repositories.transactions import (
     get_not_rollbacked_transactions_count,
     get_transactions_count,
 )
-from statistic.celery_app import app
+from statistic.worker import app
 
 
 @app.task

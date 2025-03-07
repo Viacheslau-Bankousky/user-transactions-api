@@ -6,7 +6,7 @@ from repositories.users import (
     get_registered_users_count,
     get_users_count_with_filters,
 )
-from statistic.celery_app import app
+from statistic.worker import app
 
 
 @app.task

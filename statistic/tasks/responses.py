@@ -2,7 +2,7 @@ from datetime import date
 from typing import Dict, List
 
 from schemas.statistic import ResponseStatisticModel
-from statistic.celery_app import app
+from statistic.worker import app
 
 
 @app.task
