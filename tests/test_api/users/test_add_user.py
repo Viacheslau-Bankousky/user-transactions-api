@@ -12,7 +12,7 @@ from tests.utils.assert_checkers import (
 
 @pytest.mark.asyncio
 async def test_can_add_user(
-    overridden_dependency: AsyncGenerator, async_client: AsyncClient
+    async_client: AsyncClient
 ) -> None:
     new_user_data: Dict[str, str] = {
         "name": "new_user",

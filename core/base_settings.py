@@ -25,5 +25,17 @@ class Settings(BaseSettings):
         else:
             raise ValueError(f"Invalid environment: {self.ENVIRONMENT}")
 
+    @property
+    def celery_broker_url(self) -> str:
+        if not (self.RABBIT_USER and self.RABBIT_PASSWORD):
+            raise ValueError(
+                "RABBIT_USER and RABBIT_PASSWORD must be set in Production"
+            )
+        return f"amqp://{self.RABBIT_USER}:{self.RABBIT_PASSWORD}@rabbitmq:5672//"
+
+    @property
+    def celery_backend_url(self) -> str:
+        return "redis://redis:6379"
+
 
 settings = Settings()

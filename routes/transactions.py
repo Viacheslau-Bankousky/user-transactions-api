@@ -271,6 +271,7 @@ async def rollback_transaction(
     dependencies=[Depends(check_user_has_token)],
 )
 async def get_transaction_analysis(weeks_count: int):
+    app_logger.info("Received GET request for /transactions/analysis endpoint")
     check_weeks_count(weeks_count=weeks_count)
     start_date: date = date.today() - timedelta(weeks=weeks_count)
     dt_gt: date = start_date
@@ -291,10 +292,10 @@ async def get_transaction_analysis(weeks_count: int):
             ),
             create_statistic_response.s(dt_gt, dt_lt),
         )
-        await execute_tasks_chain(
+        execute_tasks_chain(
             tasks_chain=tasks_chain, statistic_results=statistic_results
         )
         dt_gt += timedelta(days=7)
         dt_lt += timedelta(days=7)
-
+    app_logger.info("Statistics about transactions returned successfully")
     return statistic_results

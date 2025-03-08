@@ -8,6 +8,7 @@ services:
     depends_on:
       - db
       - rabbitmq
+      - redis
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
@@ -41,13 +42,19 @@ services:
       RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
     volumes:
       - ./rabbitmq_volume:/var/lib/rabbitmq
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
   celery:
     build: .
-    command: celery -A statistic.worker worker --pool=asyncio --loglevel=INFO
+    command: celery -A statistic.worker worker --loglevel=INFO
     working_dir: /internship-task
     depends_on:
       - rabbitmq
       - db
+      - redis
     environment:
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}

@@ -2,7 +2,7 @@ from datetime import date
 from typing import Dict, List
 
 from schemas.statistic import ResponseStatisticModel
-from statistic.worker import app
+from statistic.celery_app import app
 
 
 @app.task
@@ -14,6 +14,8 @@ def create_statistic_response(
         metric_key: str = list(metric.keys())[0]
         metric_value: int | str = list(metric.values())[0]
         response_date[metric_key] = metric_value
-    return ResponseStatisticModel(
+    response = ResponseStatisticModel(
         **response_date, start_date=start_date, end_date=end_date
     )
+    return response.model_dump()
+
