@@ -1,27 +1,22 @@
 from datetime import date
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
-# from schemas.statistic import ResponseStatisticModel
 from statistic.celery_app import app
 
 
-# @app.task
-# def create_statistic_response(
-#     tasks_result: List[Dict[str, int | str]], start_date: date, end_date: date
-# ) -> ResponseStatisticModel:
-#     response_date: Dict = {}
-#     for metric in tasks_result:
-#         metric_key: str = list(metric.keys())[0]
-#         metric_value: int | str = list(metric.values())[0]
-#         response_date[metric_key] = metric_value
-#     response = ResponseStatisticModel(
-#         **response_date, start_date=start_date, end_date=end_date
-#     )
-#     return response.model_dump()
 @app.task
 def create_statistic_response(
-    metrics: List[List[Dict[str, str]]]
+    metrics: List[List[Dict[str, str]]], date_ranges: List[Tuple[date, date]]
 ) -> List[Dict[str, str]]:
     response_data: List[Dict] = []
+    for date_range in date_ranges:
+        dt_gt, dt_lt = date_range
+        response_data.append(
+            {"start_date": str(dt_gt), "end_date": str(dt_lt)}
+        )
+
     for metric in metrics:
-       pass
+        for index, metric_data in enumerate(metric):
+            response_data[index].update(metric_data)
+
+    return response_data

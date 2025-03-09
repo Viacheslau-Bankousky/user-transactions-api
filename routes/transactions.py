@@ -1,5 +1,5 @@
-from datetime import date, timedelta
-from typing import Annotated, AsyncContextManager, List, Sequence, cast, Tuple
+from datetime import date
+from typing import Annotated, AsyncContextManager, List, Sequence, cast
 
 from celery import chain, group
 from fastapi import APIRouter, Depends, status
@@ -23,7 +23,7 @@ from services.preconditions import (
 )
 from services.refund import process_refund
 from services.rollback import make_roll_back
-from statistic.tasks_execution import execute_tasks_chain
+from statistic.helpers import generate_date_ranges
 from statistic.tasks.responses import create_statistic_response
 from statistic.tasks.transactions import (
     calculate_not_rollbacked_deposit_amount,
@@ -36,12 +36,12 @@ from statistic.tasks.users import (
     calculate_registered_and_not_rollbacked_deposit_users,
     calculate_registered_users,
 )
+from statistic.tasks_execution import execute_tasks_chain
 from validators.statisctic import check_weeks_count
 from validators.transactions import (
     check_transaction_status,
     check_transactions_exist,
 )
-from statistic.helpers import generate_date_ranges
 
 SESSION_DEPENDENCY = Annotated[
     AsyncContextManager[AsyncSession], Depends(get_session)
@@ -263,43 +263,6 @@ async def rollback_transaction(
     return roll_backed_transaction
 
 
-# @router.get(
-#     "/transactions/analysis/period/{weeks_count:int}",
-#     response_model=Sequence[ResponseStatisticModel],
-#     status_code=status.HTTP_200_OK,
-#     description="Show statistics about transactions.",
-#     response_description="Statistics returned successfully.",
-#     dependencies=[Depends(check_user_has_token)],
-# )
-# async def get_transaction_analysis(weeks_count: int):
-#     app_logger.info("Received GET request for /transactions/analysis endpoint")
-#     check_weeks_count(weeks_count=weeks_count)
-#     start_date: date = date.today() - timedelta(weeks=weeks_count)
-#     dt_gt: date = start_date
-#     dt_lt: date = start_date + timedelta(days=6)
-#     statistic_results: List[ResponseStatisticModel] = []
-#     while dt_lt <= date.today():
-#         tasks_chain = chain(
-#             group(
-#                 calculate_registered_users.s(dt_gt, dt_lt),
-#                 calculate_registered_and_deposit_users.s(dt_gt, dt_lt),
-#                 calculate_registered_and_not_rollbacked_deposit_users.s(
-#                     dt_gt, dt_lt
-#                 ),
-#                 calculate_transactions.s(dt_gt, dt_lt),
-#                 calculate_not_rollbacked_transactions.s(dt_gt, dt_lt),
-#                 calculate_not_rollbacked_deposit_amount.s(dt_gt, dt_lt),
-#                 calculate_not_rollbacked_withdraw_amount.s(dt_gt, dt_lt),
-#             ),
-#             create_statistic_response.s(dt_gt, dt_lt),
-#         )
-#         execute_tasks_chain(
-#             tasks_chain=tasks_chain, statistic_results=statistic_results
-#         )
-#         dt_gt += timedelta(days=7)
-#         dt_lt += timedelta(days=7)
-#     app_logger.info("Statistics about transactions returned successfully")
-#     return statistic_results
 @router.get(
     "/transactions/analysis/period/{weeks_count:int}",
     response_model=Sequence[ResponseStatisticModel],
@@ -311,8 +274,9 @@ async def rollback_transaction(
 async def get_transaction_analysis(weeks_count: int):
     app_logger.info("Received GET request for /transactions/analysis endpoint")
     check_weeks_count(weeks_count=weeks_count)
-    date_ranges: List[tuple[date, date]] = generate_date_ranges(weeks_count=weeks_count)
-    statistic_results: List[ResponseStatisticModel] = []
+    date_ranges: List[tuple[date, date]] = generate_date_ranges(
+        weeks_count=weeks_count
+    )
     tasks_chain = chain(
         group(
             calculate_registered_users.s(date_ranges),
@@ -325,10 +289,10 @@ async def get_transaction_analysis(weeks_count: int):
             calculate_not_rollbacked_deposit_amount.s(date_ranges),
             calculate_not_rollbacked_withdraw_amount.s(date_ranges),
         ),
-        create_statistic_response.s(),
+        create_statistic_response.s(date_ranges),
     )
-    execute_tasks_chain(
-        tasks_chain=tasks_chain, statistic_results=statistic_results
+    tasks_result: List[ResponseStatisticModel] = execute_tasks_chain(
+        tasks_chain=tasks_chain
     )
     app_logger.info("Statistics about transactions returned successfully")
-    return statistic_results
+    return tasks_result
