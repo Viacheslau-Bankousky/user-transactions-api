@@ -1,6 +1,8 @@
 import asyncio
 from datetime import date, timedelta
-from typing import Any, Awaitable, Dict, List, Tuple
+from typing import Any, Awaitable, Callable, Dict, List, Tuple
+
+from core.database import get_session
 
 
 def generate_date_ranges(weeks_count: int) -> List[Tuple[date, date]]:
@@ -44,3 +46,20 @@ def run_in_loop(coro: Awaitable[Any]) -> Any:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         return loop.run_until_complete(coro)
+
+
+async def process_date_ranges_with_session(
+    date_ranges: List[Tuple[date, date]],
+    metric_function: Callable,
+    **kwargs,
+) -> List[Any]:
+    async def process_single_range(dt_gt: date, dt_lt: date) -> Any:
+        async with get_session() as session:
+            return await metric_function(session, dt_gt, dt_lt, **kwargs)
+
+    coroutines = [
+        process_single_range(dt_gt, dt_lt) for dt_gt, dt_lt in date_ranges
+    ]
+    results: List[Any] = await asyncio.gather(*coroutines)
+
+    return results

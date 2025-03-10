@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     @property
     def celery_backend_url(self) -> str:
-        return "redis://redis:6379"
+        return "redis://redis:6379/0"
 
 
 settings = Settings()

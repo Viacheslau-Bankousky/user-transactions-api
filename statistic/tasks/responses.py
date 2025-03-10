@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Dict, List, Tuple
 
-from statistic.celery_app import app
+from core.celery_app import app
 
 
 @app.task

@@ -1,7 +1,8 @@
 from datetime import date
 from typing import Annotated, AsyncContextManager, List, Sequence, cast
 
-from celery import chain, group
+from celery import chord, group, uuid
+from celery.result import GroupResult
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,7 +37,6 @@ from statistic.tasks.users import (
     calculate_registered_and_not_rollbacked_deposit_users,
     calculate_registered_users,
 )
-from statistic.tasks_execution import execute_tasks_chain
 from validators.statisctic import check_weeks_count
 from validators.transactions import (
     check_transaction_status,
@@ -265,34 +265,88 @@ async def rollback_transaction(
 
 @router.get(
     "/transactions/analysis/period/{weeks_count:int}",
-    response_model=Sequence[ResponseStatisticModel],
     status_code=status.HTTP_200_OK,
     description="Show statistics about transactions.",
     response_description="Statistics returned successfully.",
     dependencies=[Depends(check_user_has_token)],
 )
-async def get_transaction_analysis(weeks_count: int):
-    app_logger.info("Received GET request for /transactions/analysis endpoint")
+async def get_transaction_analysis(weeks_count: int) -> dict[str, str]:
+    app_logger.info("Received GET request for /transactions/analysis/period"
+                    " endpoint")
     check_weeks_count(weeks_count=weeks_count)
     date_ranges: List[tuple[date, date]] = generate_date_ranges(
         weeks_count=weeks_count
     )
-    tasks_chain = chain(
+    group_id = str(uuid())
+
+    statistics_workflow = chord(
         group(
-            calculate_registered_users.s(date_ranges),
-            calculate_registered_and_deposit_users.s(date_ranges),
-            calculate_registered_and_not_rollbacked_deposit_users.s(
-                date_ranges
-            ),
-            calculate_transactions.s(date_ranges),
-            calculate_not_rollbacked_transactions.s(date_ranges),
-            calculate_not_rollbacked_deposit_amount.s(date_ranges),
-            calculate_not_rollbacked_withdraw_amount.s(date_ranges),
+            [
+                calculate_registered_users.s(date_ranges),
+                calculate_registered_and_deposit_users.s(date_ranges),
+                calculate_registered_and_not_rollbacked_deposit_users.s(
+                    date_ranges
+                ),
+                calculate_transactions.s(date_ranges),
+                calculate_not_rollbacked_transactions.s(date_ranges),
+                calculate_not_rollbacked_deposit_amount.s(date_ranges),
+                calculate_not_rollbacked_withdraw_amount.s(date_ranges),
+            ]
         ),
         create_statistic_response.s(date_ranges),
-    )
-    tasks_result: List[ResponseStatisticModel] = execute_tasks_chain(
-        tasks_chain=tasks_chain
-    )
-    app_logger.info("Statistics about transactions returned successfully")
-    return tasks_result
+    ).apply_async(group_id=group_id)
+
+
+    app_logger.info(
+            f"Statistics workflow created with ID: {group_id}"
+        )
+    return {"Statistics workflow ID": group_id}
+
+
+@router.get(
+    "/transactions/analysis/status/{statistics_workflow_id:str}",
+    status_code=status.HTTP_200_OK,
+    description="Show statistics about transactions.",
+    response_description="Statistics returned successfully.",
+    dependencies=[Depends(check_user_has_token)],
+)
+async def get_statistics_workflow_status(
+    statistics_workflow_id: str,
+) -> dict[str, str]:
+    app_logger.info("Received GET request for /transactions/analysis/status"
+                    " endpoint")
+    group_result = GroupResult.restore(statistics_workflow_id)
+
+    if not group_result:
+        app_logger.info(f"Statistics workflow ID {statistics_workflow_id} "
+                        f"not found.")
+        return {
+            "statistics_workflow_id": statistics_workflow_id,
+            "status": "NOT FOUND",
+        }
+
+    if group_result.successful():
+        app_logger.info(f"Showing statistics workflow ID {statistics_workflow_id} ")
+        return {
+            "statistics_workflow_id": statistics_workflow_id,
+            "status": "SUCCESS",
+            "results": [
+                ResponseStatisticModel(**result)
+                for result in group_result.results
+            ],
+        }
+    elif group_result.failed():
+        app_logger.info(f"Statistics workflow ID {statistics_workflow_id}"
+                        f" failed {group_result.traceback} ")
+        return {
+            "statistics_workflow_id": statistics_workflow_id,
+            "status": "FAILURE",
+            "details": str(group_result.traceback),
+        }
+    else:
+        app_logger.info(f"Something went wrong with statistics"
+                        f" workflow ID {statistics_workflow_id}")
+        return {
+            "statistics_workflow_id": statistics_workflow_id,
+            "status": group_result.status,
+        }

@@ -49,7 +49,7 @@ services:
       - "6379:6379"
   celery:
     build: .
-    command: celery -A statistic.celery_app worker --loglevel=INFO
+    command: celery -A core.celery_app worker --loglevel=INFO
     working_dir: /internship-task
     depends_on:
       - rabbitmq
