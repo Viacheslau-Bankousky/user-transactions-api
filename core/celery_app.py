@@ -14,4 +14,5 @@ app.conf.update(
     task_serializer="json",
     result_serializer="json",
     broker_connection_retry_on_startup=True,
+    result_expires=3600,
 )

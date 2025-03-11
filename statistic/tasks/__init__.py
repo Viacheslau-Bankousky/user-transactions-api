@@ -1,3 +1,4 @@
 import statistic.tasks.responses
 import statistic.tasks.transactions
 import statistic.tasks.users
+import statistic.tasks.processing
