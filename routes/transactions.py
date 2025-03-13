@@ -1,5 +1,5 @@
 from datetime import date
-from typing import Annotated, AsyncContextManager, List, Sequence, cast, Dict
+from typing import Annotated, AsyncContextManager, Dict, List, Sequence, cast
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, status
@@ -11,7 +11,7 @@ from core.logger_configuration import app_logger
 from models.transactions import Transaction
 from models.users import UserBalance
 from repositories.transactions import take_transactions
-# from schemas.statistic import ResponseStatisticModel
+from schemas.statistic import ResponseStatisticModel
 from schemas.transactions import (
     RequestTransactionModel,
     TransactionModel,
@@ -25,8 +25,7 @@ from services.refund import process_refund
 from services.rollback import make_roll_back
 from statistic.helpers import generate_date_ranges
 from statistic.tasks.processing import calculate_statistics_for_all_dates
-
-from validators.statisctic import check_weeks_count
+from validators.statisctic import check_task_result_status, check_weeks_count
 from validators.transactions import (
     check_transaction_status,
     check_transactions_exist,
@@ -252,40 +251,6 @@ async def rollback_transaction(
     return roll_backed_transaction
 
 
-# @router.get(
-#     "/transactions/analysis/period/{weeks_count:int}",
-#     status_code=status.HTTP_200_OK,
-#     description="Show statistics about transactions.",
-#     response_description="Statistics returned successfully.",
-#     dependencies=[Depends(check_user_has_token)],
-# )
-# async def get_transaction_analysis(weeks_count: int) -> dict[str, str]:
-#     app_logger.info("Received GET request for /transactions/analysis/period"
-#                     " endpoint")
-#     check_weeks_count(weeks_count=weeks_count)
-#     date_ranges: List[tuple[date, date]] = generate_date_ranges(
-#         weeks_count=weeks_count
-#     )
-#
-#     statistics_workflow = chord(
-#         [
-#             calculate_registered_users.s(date_ranges),
-#             calculate_registered_and_deposit_users.s(date_ranges),
-#             calculate_registered_and_not_rollbacked_deposit_users.s(
-#                 date_ranges
-#             ),
-#             calculate_transactions.s(date_ranges),
-#             calculate_not_rollbacked_transactions.s(date_ranges),
-#             calculate_not_rollbacked_deposit_amount.s(date_ranges),
-#             calculate_not_rollbacked_withdraw_amount.s(date_ranges),
-#         ]
-#     )( create_statistic_response.s(date_ranges))
-#
-#     statistics_workflow = calculate_registered_users.s(date_ranges).apply_async()
-#     app_logger.info(
-#             f"Statistics workflow created with ID: {statistics_workflow.id}"
-#         )
-#     return {"Statistics workflow ID": statistics_workflow.id}
 @router.get(
     "/transactions/analysis/period/{weeks_count:int}",
     status_code=status.HTTP_200_OK,
@@ -293,7 +258,7 @@ async def rollback_transaction(
     response_description="Statistics returned successfully.",
     dependencies=[Depends(check_user_has_token)],
 )
-async def get_transaction_analysis(weeks_count: int) -> dict[str, str]:
+async def get_transaction_analysis(weeks_count: int) -> Dict[str, str]:
     app_logger.info(
         "Received GET request for /transactions/analysis/period" " endpoint"
     )
@@ -301,71 +266,52 @@ async def get_transaction_analysis(weeks_count: int) -> dict[str, str]:
     date_ranges: List[tuple[date, date]] = generate_date_ranges(
         weeks_count=weeks_count
     )
-    statistics_workflow: AsyncResult = (
-        calculate_statistics_for_all_dates.s(date_ranges).apply_async()
-    )
+    statistics_workflow: AsyncResult = calculate_statistics_for_all_dates.s(
+        date_ranges
+    ).apply_async()
     app_logger.info(
-        f"Statistics workflow created with ID: {statistics_workflow.id}")
+        f"Statistics workflow created with ID: {statistics_workflow.id}"
+    )
 
-    return {"Task ID": statistics_workflow.task_id}
+    return {"Task ID": statistics_workflow.id}
+
 
 @router.get(
     "/transactions/analysis/status/{task_id:str}",
     status_code=status.HTTP_200_OK,
     description="Show statistics about transactions.",
     response_description="Statistics returned successfully.",
+    response_model=List[ResponseStatisticModel],
     dependencies=[Depends(check_user_has_token)],
 )
 async def get_statistics_workflow_status(
     task_id: str,
-) -> List[Dict[str, str]]:
+):
     app_logger.info(
-        "Received GET request for /transactions/analysis/status" " endpoint"
+        "Received GET request for /transactions/analysis/status endpoint"
     )
-    main_statistics_result: AsyncResult = AsyncResult(task_id)
+    response_data: List[ResponseStatisticModel] = []
 
-    if not main_statistics_result:
-        app_logger.info(
-            f"task ID {task_id} " f"not found."
+    main_statistics_result: AsyncResult = AsyncResult(task_id)
+    check_task_result_status(task_result=main_statistics_result)
+    main_statistics_result = cast(AsyncResult, main_statistics_result)
+
+    all_dates_task_id: str = main_statistics_result.get()
+    all_dates_task_result: AsyncResult = AsyncResult(all_dates_task_id)
+    check_task_result_status(task_result=all_dates_task_result)
+    all_dates_task_result = cast(AsyncResult, all_dates_task_result)
+
+    date_ranges_tasks_ids: List[str] = all_dates_task_result.get()
+    for date_range_task_id in date_ranges_tasks_ids:
+        date_range_task_result: AsyncResult = AsyncResult(date_range_task_id)
+        check_task_result_status(task_result=date_range_task_result)
+        date_range_task_result = cast(AsyncResult, date_range_task_result)
+        date_range_task_result_value: Dict[str, int | str] = (
+            date_range_task_result.get()
         )
-        return {
-            "task ID": task_id,
-            "status": "NOT FOUND",
-        }
-    if main_statistics_result.ready():
-        app_logger.info(
-            f"Showing task ID {task_id} "
+        response_data.append(
+            ResponseStatisticModel(**date_range_task_result_value)
         )
-        # return {
-        #     "statistics_workflow_id": statistics_workflow_id,
-        #     "status": "SUCCESS",
-        #     "results": [
-        #         ResponseStatisticModel(**result)
-        #         for result in statistics_result.result
-        #     ],
-        # }
-        external_nested_task_id: int = main_statistics_result.get()
-        internal_nested_task_result: AsyncResult = AsyncResult(external_nested_task_id)
-        internal_nested_task_id: int = internal_nested_task_result.get()
-        app_logger.info(f"INTERNAL TASK ID: {internal_nested_task_id}")
-        # final_tasks_values_result: AsyncResult = AsyncResult(internal_nested_task_id)
-        # final_tasks_values: List[Dict[str, str]] = final_tasks_values_result.get()
-        # app_logger.info(f"Extracted RESULT: {final_tasks_values}")
-    elif main_statistics_result.failed():
-        app_logger.info(
-            f"task ID {task_id} "
-            f" failed {main_statistics_result.traceback} "
-        )
-        return {
-            "task ID": task_id,
-            "status": "FAILURE",
-        }
-    else:
-        app_logger.info(
-            f"task ID {task_id} "
-            f"is not ready yet. "
-        )
-        return {
-            "task ID": task_id,
-            "status": main_statistics_result.status,
-        }
+
+    app_logger.info("Statistics data returned successfully")
+    return response_data

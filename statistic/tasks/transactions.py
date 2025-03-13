@@ -39,7 +39,6 @@ def calculate_not_rollbacked_transactions(
     return {"not_rollbacked_transactions_count": results}
 
 
-
 @app.task
 def calculate_not_rollbacked_deposit_amount(
     dt_gt: date, dt_lt: date
@@ -53,7 +52,6 @@ def calculate_not_rollbacked_deposit_amount(
     results: Decimal = run_in_loop(coro)
 
     return {"not_rollbacked_deposit_amount": str(results)}
-
 
 
 @app.task

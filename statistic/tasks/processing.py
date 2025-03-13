@@ -1,5 +1,5 @@
 from datetime import date
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 from celery import chord
 
@@ -22,7 +22,9 @@ from statistic.tasks.users import (
 
 
 @app.task
-def calculate_statistics_for_date_range(dt_gt: date, dt_lt: date) -> int:
+def calculate_statistics_for_date_range(
+    dt_gt: date, dt_lt: date
+) -> Dict[str, int | str]:
     task_result = chord(
         [
             calculate_registered_users.s(dt_gt, dt_lt),
@@ -45,9 +47,8 @@ def calculate_statistics_for_all_dates(
     date_ranges: List[Tuple[date, date]]
 ) -> int:
     all_statistics_period = [
-        calculate_statistics_for_date_range(dt_gt, dt_lt)
+        calculate_statistics_for_date_range.s(dt_gt, dt_lt)
         for dt_gt, dt_lt in date_ranges
     ]
     result = chord(all_statistics_period)(create_final_statistic_response.s())
     return result.id
-

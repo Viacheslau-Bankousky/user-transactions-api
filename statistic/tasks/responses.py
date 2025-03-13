@@ -17,9 +17,8 @@ def create_statistic_response(
     return response_data
 
 
-
 @app.task
 def create_final_statistic_response(
-        metrics: List[Dict[str, str | int]]
+    metrics: List[Dict[str, str | int]]
 ) -> List[Dict[str, str | int]]:
     return metrics
