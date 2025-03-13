@@ -1,7 +1,7 @@
 from datetime import date
-from typing import Annotated, AsyncContextManager, List, Sequence, cast
+from typing import Annotated, AsyncContextManager, List, Sequence, cast, Dict
 
-from celery.result import AsyncResult, GroupResult
+from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,7 @@ from core.logger_configuration import app_logger
 from models.transactions import Transaction
 from models.users import UserBalance
 from repositories.transactions import take_transactions
-from schemas.statistic import ResponseStatisticModel
+# from schemas.statistic import ResponseStatisticModel
 from schemas.transactions import (
     RequestTransactionModel,
     TransactionModel,
@@ -26,18 +26,6 @@ from services.rollback import make_roll_back
 from statistic.helpers import generate_date_ranges
 from statistic.tasks.processing import calculate_statistics_for_all_dates
 
-# from statistic.tasks.responses import create_statistic_response
-# from statistic.tasks.transactions import (
-#     calculate_not_rollbacked_deposit_amount,
-#     calculate_not_rollbacked_transactions,
-#     calculate_not_rollbacked_withdraw_amount,
-#     calculate_transactions,
-# )
-# from statistic.tasks.users import (
-#     calculate_registered_and_deposit_users,
-#     calculate_registered_and_not_rollbacked_deposit_users,
-#     calculate_registered_users,
-# )
 from validators.statisctic import check_weeks_count
 from validators.transactions import (
     check_transaction_status,
@@ -313,48 +301,40 @@ async def get_transaction_analysis(weeks_count: int) -> dict[str, str]:
     date_ranges: List[tuple[date, date]] = generate_date_ranges(
         weeks_count=weeks_count
     )
-    try:
-        statistics_workflow: AsyncResult = (
-            calculate_statistics_for_all_dates.s(date_ranges).apply_async()
-        )
-        app_logger.info(
-            f"Statistics workflow created with ID: {statistics_workflow.id}"
-        )
-        return {"Statistics workflow ID": statistics_workflow.id}
-    except Exception as exc:
-        app_logger.error(
-            f"Error occurred while creating statistics workflow: {exc}"
-        )
-        return {"error": "Error occurred while creating statistics workflow"}
+    statistics_workflow: AsyncResult = (
+        calculate_statistics_for_all_dates.s(date_ranges).apply_async()
+    )
+    app_logger.info(
+        f"Statistics workflow created with ID: {statistics_workflow.id}")
 
+    return {"Task ID": statistics_workflow.task_id}
 
 @router.get(
-    "/transactions/analysis/status/{statistics_workflow_id:str}",
+    "/transactions/analysis/status/{task_id:str}",
     status_code=status.HTTP_200_OK,
     description="Show statistics about transactions.",
     response_description="Statistics returned successfully.",
     dependencies=[Depends(check_user_has_token)],
 )
 async def get_statistics_workflow_status(
-    statistics_workflow_id: str,
-) -> dict[str, str]:
+    task_id: str,
+) -> List[Dict[str, str]]:
     app_logger.info(
         "Received GET request for /transactions/analysis/status" " endpoint"
     )
-    statistics_result = AsyncResult(statistics_workflow_id)
+    main_statistics_result: AsyncResult = AsyncResult(task_id)
 
-    if not statistics_result:
+    if not main_statistics_result:
         app_logger.info(
-            f"Statistics workflow ID {statistics_workflow_id} " f"not found."
+            f"task ID {task_id} " f"not found."
         )
         return {
-            "statistics_workflow_id": statistics_workflow_id,
+            "task ID": task_id,
             "status": "NOT FOUND",
         }
-
-    if statistics_result.ready():
+    if main_statistics_result.ready():
         app_logger.info(
-            f"Showing statistics workflow ID {statistics_workflow_id} "
+            f"Showing task ID {task_id} "
         )
         # return {
         #     "statistics_workflow_id": statistics_workflow_id,
@@ -364,36 +344,28 @@ async def get_statistics_workflow_status(
         #         for result in statistics_result.result
         #     ],
         # }
-        if statistics_result.children:
-            results = []
-            for group in statistics_result.children:
-                try:
-                    if isinstance(group, GroupResult):
-                        group_results = group.join()
-                        app_logger.info(f"Extracted Group Results: {group_results}")
-                        results.append(group_results)
-                    else:
-                        app_logger.warning(f"Unexpected result type: {type(group)}")
-                except Exception as e:
-                    app_logger.error(f"Error retrieving results from GroupResult: {e}")
-            app_logger.info(f"Final Extracted RESULTS: {results}")
-
-    elif statistics_result.failed():
+        external_nested_task_id: int = main_statistics_result.get()
+        internal_nested_task_result: AsyncResult = AsyncResult(external_nested_task_id)
+        internal_nested_task_id: int = internal_nested_task_result.get()
+        app_logger.info(f"INTERNAL TASK ID: {internal_nested_task_id}")
+        # final_tasks_values_result: AsyncResult = AsyncResult(internal_nested_task_id)
+        # final_tasks_values: List[Dict[str, str]] = final_tasks_values_result.get()
+        # app_logger.info(f"Extracted RESULT: {final_tasks_values}")
+    elif main_statistics_result.failed():
         app_logger.info(
-            f"Statistics workflow ID {statistics_workflow_id}"
-            f" failed {statistics_result.traceback} "
+            f"task ID {task_id} "
+            f" failed {main_statistics_result.traceback} "
         )
         return {
-            "statistics_workflow_id": statistics_workflow_id,
+            "task ID": task_id,
             "status": "FAILURE",
-            "details": str(statistics_result.traceback),
         }
     else:
         app_logger.info(
-            f"Statistics workflow ID {statistics_workflow_id} "
+            f"task ID {task_id} "
             f"is not ready yet. "
         )
         return {
-            "statistics_workflow_id": statistics_workflow_id,
-            "status": statistics_result.status,
+            "task ID": task_id,
+            "status": main_statistics_result.status,
         }

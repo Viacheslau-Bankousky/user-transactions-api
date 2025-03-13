@@ -1,8 +1,7 @@
 from datetime import date
-from typing import Dict, List, Tuple
+from typing import List, Tuple
 
 from celery import chord
-from celery.result import GroupResult
 
 from core.celery_app import app
 from statistic.tasks.responses import (
@@ -23,7 +22,7 @@ from statistic.tasks.users import (
 
 
 @app.task
-def calculate_statistics_for_date_range(dt_gt: date, dt_lt: date) -> GroupResult:
+def calculate_statistics_for_date_range(dt_gt: date, dt_lt: date) -> int:
     task_result = chord(
         [
             calculate_registered_users.s(dt_gt, dt_lt),
@@ -38,17 +37,17 @@ def calculate_statistics_for_date_range(dt_gt: date, dt_lt: date) -> GroupResult
         ]
     )(create_statistic_response.s(dt_gt, dt_lt))
 
-    return task_result
+    return task_result.id
 
 
 @app.task
 def calculate_statistics_for_all_dates(
     date_ranges: List[Tuple[date, date]]
 ) -> int:
-    all_chords = [
+    all_statistics_period = [
         calculate_statistics_for_date_range(dt_gt, dt_lt)
         for dt_gt, dt_lt in date_ranges
     ]
-    result = chord(all_chords)(create_final_statistic_response.s())
+    result = chord(all_statistics_period)(create_final_statistic_response.s())
     return result.id
 
