@@ -145,7 +145,7 @@ async def get_registered_users_count(
     return users_count
 
 
-async def get_users_count_with_filters(
+async def get_users_count_with_deposit_transactions(
     session: AsyncSession,
     dt_gt: date,
     dt_lt: date,

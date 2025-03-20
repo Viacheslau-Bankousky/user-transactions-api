@@ -273,7 +273,7 @@ async def get_transaction_analysis(weeks_count: int) -> Dict[str, str]:
         f"Statistics workflow created with ID: {statistics_workflow.id}"
     )
 
-    return {"Task ID": statistics_workflow.id}
+    return {"task_id": statistics_workflow.id}
 
 
 @router.get(
