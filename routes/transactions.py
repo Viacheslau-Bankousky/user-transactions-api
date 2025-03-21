@@ -298,14 +298,10 @@ async def get_statistics_workflow_status(
 
     all_dates_task_id: str = main_statistics_result.get()
     all_dates_task_result: AsyncResult = AsyncResult(all_dates_task_id)
-    check_task_result_status(task_result=all_dates_task_result)
-    all_dates_task_result = cast(AsyncResult, all_dates_task_result)
 
     date_ranges_tasks_ids: List[str] = all_dates_task_result.get()
     for date_range_task_id in date_ranges_tasks_ids:
         date_range_task_result: AsyncResult = AsyncResult(date_range_task_id)
-        check_task_result_status(task_result=date_range_task_result)
-        date_range_task_result = cast(AsyncResult, date_range_task_result)
         date_range_task_result_value: Dict[str, int | str] = (
             date_range_task_result.get()
         )
