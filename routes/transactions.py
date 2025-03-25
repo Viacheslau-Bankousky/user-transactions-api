@@ -3,6 +3,7 @@ from typing import Annotated, AsyncContextManager, Dict, List, Sequence, cast
 
 from celery.result import AsyncResult
 from fastapi import APIRouter, Depends, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from authentication.user_management import check_user_has_token
@@ -25,7 +26,10 @@ from services.refund import process_refund
 from services.rollback import make_roll_back
 from statistic.helpers import generate_date_ranges
 from statistic.tasks.processing import calculate_statistics_for_all_dates
-from validators.statisctic import check_task_result_status, check_weeks_count
+from validators.statisctic import (
+    check_failed_or_pending_tasks,
+    check_weeks_count,
+)
 from validators.transactions import (
     check_transaction_status,
     check_transactions_exist,
@@ -281,7 +285,7 @@ async def get_transaction_analysis(weeks_count: int) -> Dict[str, str]:
     status_code=status.HTTP_200_OK,
     description="Show statistics about transactions.",
     response_description="Statistics returned successfully.",
-    response_model=List[ResponseStatisticModel],
+    response_model=List[ResponseStatisticModel] | Dict[str, str],
     dependencies=[Depends(check_user_has_token)],
 )
 async def get_statistics_workflow_status(
@@ -293,8 +297,11 @@ async def get_statistics_workflow_status(
     response_data: List[ResponseStatisticModel] = []
 
     main_statistics_result: AsyncResult = AsyncResult(task_id)
-    check_task_result_status(task_result=main_statistics_result)
-    main_statistics_result = cast(AsyncResult, main_statistics_result)
+    failed_or_pending_task: Dict[str, str] | None = (
+        check_failed_or_pending_tasks(task_result=main_statistics_result)
+    )
+    if failed_or_pending_task:
+        return JSONResponse(content=failed_or_pending_task)
 
     all_dates_task_id: str = main_statistics_result.get()
     all_dates_task_result: AsyncResult = AsyncResult(all_dates_task_id)
