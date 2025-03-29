@@ -1,12 +1,28 @@
 """
 Module for performing user-related operations with SQLAlchemy ORM.
 
-This module provides utility functions for querying, creating, and updating
-user data in the database.
-It leverages SQLAlchemy's ORM and FastAPI data models to perform common
-operations such as filtering, ordering, and handling data integrity issues.
-The module supports asynchronous database operations to ensure scalability
-and modern application design.
+This module provides a collection of utility functions for querying,
+creating, and updating users, as well as retrieving user-related
+statistics from the database.
+It relies on SQLAlchemy's asynchronous ORM to manage database
+interactions and leverages FastAPI's data models for input validation
+and data consistency.
+
+Key features include:
+- Fetching single or multiple users based on specific filters
+ (`take_user`, `take_users`).
+- Creating new users with automated balance initialization for
+ supported currencies (`create_user`).
+- Updating user details safely by handling non-existent
+ user cases (`update_user`).
+- Calculating user statistics, such as the number of registered
+ users within a date range (`get_registered_users_count`)
+  or users with specific transaction types
+   (`get_users_count_with_deposit_transactions`).
+
+The module ensures robust error handling, such as catching unique
+violations when creating users, and supports full asynchronous
+operations for scalable and efficient handling of database tasks.
 """
 
 from datetime import date
@@ -137,6 +153,18 @@ async def update_user(
 async def get_registered_users_count(
     session: AsyncSession, dt_gt: date, dt_lt: date
 ) -> int:
+    """
+    Count the number of users registered within a specified date range.
+
+    Args:
+        session (AsyncSession): The asynchronous SQLAlchemy session used
+            to interact with the database.
+        dt_gt (date): The start date of the range (inclusive).
+        dt_lt (date): The end date of the range (inclusive).
+
+    Returns:
+        int: The count of registered users within the specified date range.
+    """
     query: Select = select(func.count(User.id)).where(
         get_date_range_filter(date_from=dt_gt, date_to=dt_lt, model=User)
     )
@@ -151,6 +179,21 @@ async def get_users_count_with_deposit_transactions(
     dt_lt: date,
     exclude_rollbacked: bool = False,
 ) -> int:
+    """
+    Count the number of users who performed deposit transactions.
+
+    Args:
+        session (AsyncSession): The asynchronous SQLAlchemy session
+            used to interact with the database.
+        dt_gt (date): The start date of the range (inclusive).
+        dt_lt (date): The end date of the range (inclusive).
+        exclude_rollbacked (bool): Whether to exclude transactions
+            that were rolled back.
+
+    Returns:
+        int: The count of users who performed deposit transactions
+            matching the specified criteria.
+    """
     conditions: List[BinaryExpression] = [
         get_date_range_filter(date_from=dt_gt, date_to=dt_lt, model=User),
         get_date_range_filter(

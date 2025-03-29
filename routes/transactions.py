@@ -1,3 +1,24 @@
+"""
+Module for providing transaction-related API endpoints.
+
+This module contains a variety of endpoints for managing, retrieving,
+and analyzing transaction data.
+The API is designed using FastAPI and incorporates authentication,
+database interactions, and Celery-based task handling.
+
+Key features:
+- **Retrieve Transactions**: Endpoints to fetch transactions with filters
+ (user, status).
+- **Create Transactions**: Endpoints to add refund (top-up) or deduct
+ (withdrawal) transactions.
+- **Modify Transactions**: Endpoint for rolling back previous transactions.
+- **Transaction Statistics**: Endpoints for analyzing transaction data over
+ a period via asynchronous Celery tasks.
+
+All endpoints include centralized logging, error handling, and security
+through authentication dependencies.
+"""
+
 from datetime import date
 from typing import Annotated, AsyncContextManager, Dict, List, Sequence, cast
 
@@ -53,6 +74,17 @@ router = APIRouter()
 async def get_transactions(
     session_manager: SESSION_DEPENDENCY,
 ):
+    """
+    Fetch all transactions from the database.
+
+    Args:
+        session_manager: A context manager (`AsyncContextManager[AsyncSession]`)
+            to handle session initialization and cleanup for the database.
+
+    Returns:
+        A sequence of transactions if any exist or raises an exception
+            if none found.
+    """
     app_logger.info("Received GET request for /transactions endpoint")
     async with session_manager as session:
         transactions: Sequence[Transaction] = await take_transactions(
@@ -78,6 +110,18 @@ async def get_transaction_by_user_id(
     session_manager: SESSION_DEPENDENCY,
     user_id: int,
 ):
+    """
+    Fetch transactions for a specific user by their user ID.
+
+    Args:
+        session_manager: A context manager (`AsyncContextManager[AsyncSession]`)
+            for managing database sessions.
+        user_id: The ID of the user whose transactions are being requested.
+
+    Returns:
+        A sequence of transactions belonging to the user or raises an exception
+            if none found.
+    """
     app_logger.info(
         f"Received GET request for /users/{user_id}/" f"transactions endpoint"
     )
@@ -106,6 +150,18 @@ async def get_transaction_by_status(
     session_manager: SESSION_DEPENDENCY,
     current_status: str,
 ):
+    """
+    Fetch all transactions filtered by their status.
+
+    Args:
+        session_manager: A context manager (`AsyncContextManager[AsyncSession]`)
+            for managing database sessions.
+        current_status: A string indicating the transaction status.
+
+    Returns:
+        A sequence of transactions with the specified status or raises
+            an exception if none found.
+    """
     app_logger.info(
         f"Received GET request for /transactions/" f"{current_status} endpoint"
     )
@@ -136,6 +192,19 @@ async def get_transaction_by_user_id_and_status(
     user_id: int,
     current_status: str,
 ):
+    """
+    Fetch transactions for a specific user filtered by their status.
+
+    Args:
+        session_manager: A context manager (`AsyncContextManager[AsyncSession]`)
+            for managing database sessions.
+        user_id: The ID of the user whose transactions are being fetched.
+        current_status: The status of the transactions to filter by.
+
+    Returns:
+        A list of transactions matching the criteria or raises an exception
+            if none found.
+    """
     app_logger.info(
         f"Received GET request for /users/{user_id}"
         f"/transactions/{current_status}"
@@ -168,6 +237,18 @@ async def add_top_up_transaction(  # noqa: WPS210
     user_id: int,
     transaction_data: RequestTransactionModel,
 ):
+    """
+    Create a refund (top-up) transaction for a specific user.
+
+    Args:
+        session_manager: A context manager (`AsyncContextManager[AsyncSession]`)
+            for managing database sessions.
+        user_id: Unique identifier of the user for whom the transaction is created.
+        transaction_data: Details of the transaction to be created.
+
+    Returns:
+        The created transaction object with the relevant details.
+    """
     app_logger.info(
         f"Received POST request for /users/{user_id}/"
         "transactions/refund endpoint "
@@ -198,6 +279,18 @@ async def add_deduct_transaction(  # noqa: WPS210
     user_id: int,
     transaction_data: RequestTransactionModel,
 ):
+    """
+    Create a deduct (withdrawal) transaction for a specific user.
+
+    Args:
+        session_manager: A context manager (`AsyncContextManager[AsyncSession]`)
+            for managing database sessions.
+        user_id: Unique identifier of the user for whom the transaction is created.
+        transaction_data: Details of the transaction to be created.
+
+    Returns:
+        The created transaction object with the relevant details.
+    """
     app_logger.info(
         f"Received POST request for /users/{user_id}"
         f"/transactions/deduct/ endpoint "
@@ -228,6 +321,18 @@ async def rollback_transaction(
     user_id: int,
     transaction_id: int,
 ):
+    """
+    Rollback a specific transaction for a user.
+
+    Args:
+        session_manager: A context manager (`AsyncContextManager[AsyncSession]`)
+            for managing database sessions.
+        user_id: Unique identifier of the user whose transaction is to be rollbacked.
+        transaction_id: Identifier of the transaction to rollback.
+
+    Returns:
+        The rolled-back transaction if the process is successful.
+    """
     app_logger.info(
         f"Received PATCH request for /users/{user_id}/"
         f"transactions/{transaction_id} endpoint"
@@ -263,6 +368,16 @@ async def rollback_transaction(
     dependencies=[Depends(check_user_has_token)],
 )
 async def get_transaction_analysis(weeks_count: int) -> Dict[str, str]:
+    """
+    Request transaction statistics for a specific period of weeks.
+
+    Args:
+        weeks_count: Number of weeks to analyze transaction data for.
+
+    Returns:
+        A dictionary containing the task ID of the initiated statistics workflow
+            for tracking the task status.
+    """
     app_logger.info(
         "Received GET request for /transactions/analysis/period" " endpoint"
     )
@@ -291,6 +406,18 @@ async def get_transaction_analysis(weeks_count: int) -> Dict[str, str]:
 async def get_statistics_workflow_status(
     task_id: str,
 ):
+    """
+    Retrieve the status or results of a transaction analysis task.
+
+    Args:
+        task_id: The ID of the asynchronous analysis task.
+
+    Returns:
+        If the task is completed:
+            A list of transaction statistics.
+        If the task is in progress or failed:
+            A dictionary containing the task status and details.
+    """
     app_logger.info(
         "Received GET request for /transactions/analysis/status endpoint"
     )
