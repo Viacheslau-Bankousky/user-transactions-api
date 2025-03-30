@@ -16,5 +16,21 @@ services:
     command: pytest -vv --tb=long /internship-task/tests
     depends_on:
       - test_fastapi
+      - redis
+      - rabbitmq
     environment:
       - ENVIRONMENT=Testing
+  rabbitmq:
+    container_name: test_rabbitmq
+    image: rabbitmq:3-management
+    restart: always
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+  redis:
+    container_name: test_redis
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6380:6379"
+

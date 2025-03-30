@@ -57,9 +57,7 @@ def check_currency_response_assertation(
     expected_money_sum: Set,
 ) -> None:
     assert "balances" in response_data.keys()
-    user_balances = cast(
-        List[Dict[str, str]], response_data.get("balances")
-    )
+    user_balances = cast(List[Dict[str, str]], response_data.get("balances"))
     estimated_currencies = {
         balance.get("currency") for balance in user_balances
     }
@@ -105,3 +103,40 @@ def check_transaction_response_assertation(
     assert response_data["status"] == expected_status
     validate_datetime_format(response_data["created"])
     assert response_data["purpose"] == expected_purpose
+
+
+def check_statistics_response_assertation(
+    response_data: Dict,
+    **kwargs,
+) -> None:
+    validate_datetime_format(
+        date_str=response_data["start_date"], date_format="%Y-%m-%d"
+    )
+    validate_datetime_format(
+        date_str=response_data["end_date"], date_format="%Y-%m-%d"
+    )
+    assert (
+        response_data["registered_users_count"]
+        == kwargs["registered_users_count"]
+    )
+    assert (
+        response_data["registered_and_deposit_users_count"]
+        == kwargs["registered_and_deposit_users_count"]
+    )
+    assert (
+        response_data["registered_and_not_rollbacked_deposit_users_count"]
+        == kwargs["registered_and_not_rollbacked_deposit_users_count"]
+    )
+    assert (
+        response_data["not_rollbacked_deposit_amount"]
+        == kwargs["not_rollbacked_deposit_amount"]
+    )
+    assert (
+        response_data["not_rollbacked_withdraw_amount"]
+        == kwargs["not_rollbacked_withdraw_amount"]
+    )
+    assert response_data["transactions_count"] == kwargs["transactions_count"]
+    assert (
+        response_data["not_rollbacked_transactions_count"]
+        == kwargs["not_rollbacked_transactions_count"]
+    )

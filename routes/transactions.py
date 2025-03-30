@@ -398,8 +398,8 @@ async def get_transaction_analysis(weeks_count: int) -> Dict[str, str]:
 @router.get(
     "/transactions/analysis/status/{task_id:str}",
     status_code=status.HTTP_200_OK,
-    description="Show statistics about transactions.",
-    response_description="Statistics returned successfully.",
+    description="Show statistics report about transactions.",
+    response_description="Statistics report returned successfully.",
     response_model=List[ResponseStatisticModel] | Dict[str, str],
     dependencies=[Depends(check_user_has_token)],
 )
