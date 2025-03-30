@@ -48,7 +48,7 @@ def check_weeks_count(weeks_count: int) -> None:
     Validate the specified number of weeks.
 
     This function checks if the provided `weeks_count` exceeds the maximum
-    allowed limit (`MAX_WEEKS_COUNT`).
+    allowed limit (`MAX_WEEKS_COUNT`) or is less than 1.
     If it does, an exception is raised, and the action is logged.
 
     Args:
@@ -56,12 +56,17 @@ def check_weeks_count(weeks_count: int) -> None:
 
     Raises:
         BadRequestDataException: If `weeks_count` is greater than
-            `MAX_WEEKS_COUNT`.
+            `MAX_WEEKS_COUNT` or less than 1.
     """
     if weeks_count > MAX_WEEKS_COUNT:
         app_logger.info("Too many weeks")
         raise BadRequestDataException(
             message="Too many weeks", status_code=status.HTTP_400_BAD_REQUEST
+        )
+    elif weeks_count < 1:
+        raise BadRequestDataException(
+            message="Low number of weeks",
+            status_code=status.HTTP_400_BAD_REQUEST,
         )
 
 
