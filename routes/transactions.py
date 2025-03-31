@@ -47,7 +47,7 @@ from services.refund import process_refund
 from services.rollback import make_roll_back
 from statistic.helpers import generate_date_ranges
 from statistic.tasks.processing import calculate_statistics_for_all_dates
-from validators.statisctic import (
+from validators.statistic import (
     check_failed_or_pending_tasks,
     check_weeks_count,
 )

@@ -16,39 +16,6 @@ services:
     command: pytest -vv --tb=long /internship-task/tests
     depends_on:
       - test_fastapi
-      - redis
-      - rabbitmq
-#      - celery
     environment:
       - ENVIRONMENT=Testing
-  rabbitmq:
-    container_name: test_rabbitmq
-    image: rabbitmq:3-management
-    restart: always
-    ports:
-      - "5673:5672"
-      - "15673:15672"
-#    environment:
-#      RABBITMQ_DEFAULT_USER: ${RABBIT_USER}
-#      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASSWORD}
-  redis:
-    container_name: test_redis
-    image: redis:alpine
-    restart: always
-    ports:
-      - "6380:6379"
-#  celery:
-#    build: ..
-#    command: celery -A core.celery_app worker --loglevel=INFO
-#    working_dir: /internship-task
-#    depends_on:
-#      - rabbitmq
-#      - redis
-#    environment:
-#      RABBIT_USER: ${RABBIT_USER}
-#      RABBIT_PASSWORD: ${RABBIT_PASSWORD}
-#    env_file:
-#      - ../.env
-#    volumes:
-#      - .:/internship-task/
 
