@@ -6,7 +6,7 @@ from httpx import AsyncClient
 
 from core.constants import NOTHING_WAS_FOUND_MESSAGE
 from models.enums import UserStatusEnum
-from tests.utils.assert_checkers import check_get_user_response_assertation
+from tests.utils.assert_checkers import assert_get_user_response
 
 
 @pytest.mark.asyncio
@@ -20,21 +20,21 @@ async def test_can_get_all_users(
     response_data: List[Dict] = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_get_user_response_assertation(
+    assert_get_user_response(
         response_data=response_data[0],
         expected_user_id=3,
         expected_user_name="third_user",
         expected_email="third@user.com",
         expected_user_status=UserStatusEnum.BLOCKED,
     )
-    check_get_user_response_assertation(
+    assert_get_user_response(
         response_data=response_data[1],
         expected_user_id=2,
         expected_user_name="second_user",
         expected_email="second@user.com",
         expected_user_status=UserStatusEnum.ACTIVE,
     )
-    check_get_user_response_assertation(
+    assert_get_user_response(
         response_data=response_data[2],
         expected_user_id=1,
         expected_user_name="first_user",
@@ -58,14 +58,14 @@ async def test_can_get_active_users(
     response_data: List[Dict] = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_get_user_response_assertation(
+    assert_get_user_response(
         response_data=response_data[0],
         expected_user_id=last_expected_user_id,
         expected_user_name="second_user",
         expected_email="second@user.com",
         expected_user_status=UserStatusEnum.ACTIVE,
     )
-    check_get_user_response_assertation(
+    assert_get_user_response(
         response_data=response_data[1],
         expected_user_id=first_expected_user_id,
         expected_user_name="first_user",
@@ -90,7 +90,7 @@ async def test_can_get_users_with_blocked_status(
     response_data: List[Dict] = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_get_user_response_assertation(
+    assert_get_user_response(
         response_data=response_data[0],
         expected_user_id=expected_user_id,
         expected_user_name=expected_user_name,
@@ -115,7 +115,7 @@ async def test_can_get_user_by_id_and_name(
     response_data: Dict = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_get_user_response_assertation(
+    assert_get_user_response(
         response_data=response_data,
         expected_user_id=expected_user_id,
         expected_user_name="first_user",

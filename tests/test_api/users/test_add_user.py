@@ -6,7 +6,7 @@ from httpx import AsyncClient
 
 from models.enums import UserStatusEnum
 from tests.utils.assert_checkers import (
-    check_user_change_response,
+    assert_user_change_response,
 )
 
 
@@ -29,7 +29,7 @@ async def test_can_add_user(
     response_data: Dict = response.json()
 
     assert response.status_code == status.HTTP_201_CREATED
-    check_user_change_response(
+    assert_user_change_response(
         response_data=response_data,
         expected_user_id=expected_user_id,
         expected_user_name="new_user",

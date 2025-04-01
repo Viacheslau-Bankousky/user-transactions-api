@@ -11,7 +11,7 @@ from models.enums import (
     TransactionPurposeEnum,
     TransactionStatusEnum,
 )
-from tests.utils.assert_checkers import check_transaction_response_assertation
+from tests.utils.assert_checkers import assert_transaction_response
 
 
 @pytest.mark.asyncio
@@ -29,7 +29,7 @@ async def test_can_rollback_refund_transaction(
     response_data: Dict = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_transaction_response_assertation(
+    assert_transaction_response(
         response_data=response_data,
         expected_status=TransactionStatusEnum.ROLL_BACKED,
         expected_amount=amount,
@@ -63,7 +63,7 @@ async def test_can_rollback_deduct_transaction(
     response_data: Dict = rollback_response.json()
 
     assert rollback_response.status_code == status.HTTP_200_OK
-    check_transaction_response_assertation(
+    assert_transaction_response(
         response_data=response_data,
         expected_status=TransactionStatusEnum.ROLL_BACKED,
         expected_amount=amount,

@@ -5,23 +5,23 @@ from fastapi import status
 from httpx import AsyncClient
 from unittest.mock import patch, MagicMock
 
-from tests.utils.assert_checkers import check_statistics_response_assertation
+from tests.utils.assert_checkers import assert_statistics_response
 
 
 @patch("statistic.tasks.processing.calculate_statistics_for_all_dates.s")
 @pytest.mark.asyncio
-async def test_can_start_statistics_analise(
+async def test_start_statistics_analise(
     mocked_celery_task,
     overridden_dependency: AsyncGenerator,
     async_client: AsyncClient,
 ) -> None:
     task_id: str = "mocked_task_id"
     mock_async_result = MagicMock()
-
     mock_async_result.id = task_id
     mocked_celery_task.return_value.apply_async.return_value = (
         mock_async_result
     )
+
     response = await async_client.get(
         url="/transactions/analysis/period/1",
         timeout=5,
@@ -42,7 +42,7 @@ async def test_can_start_statistics_analise(
         ("/transactions/analysis/period/0", "Low number of weeks"),
     ],
 )
-async def test_can_not_start_statistics_analise_with_wrong_weeks_count(
+async def test_statistics_analise_with_wrong_weeks_count_error(
     overridden_dependency: AsyncGenerator,
     async_client: AsyncClient,
     route: str,
@@ -63,7 +63,7 @@ async def test_can_not_start_statistics_analise_with_wrong_weeks_count(
     "route",
     ["/transactions/analysis/period/1", "/transactions/analysis/status/1"],
 )
-async def test_can_not_get_statistics_without_authentication(
+async def test_get_statistics_without_authentication_error(
     async_client: AsyncClient,
     route: str,
 ) -> None:
@@ -81,15 +81,15 @@ async def test_can_not_get_statistics_without_authentication(
 
 @patch("routes.transactions.check_failed_or_pending_tasks")
 @pytest.mark.asyncio
-async def test_can_get_pending_statistics_result(
+async def test_get_pending_statistics_result(
     mocked_task_checker,
     overridden_dependency: AsyncGenerator,
     async_client: AsyncClient,
 ) -> None:
     expected_message: str = "Task is pending"
     pending_task_id: str = "pending_task_id"
-
     mocked_task_checker.return_value = {"message": expected_message}
+
     statistics_response = await async_client.get(
         url=f"/transactions/analysis/status/{pending_task_id}",
         timeout=5,
@@ -101,13 +101,13 @@ async def test_can_get_pending_statistics_result(
 
 
 @patch("routes.transactions.AsyncResult")
-@patch("routes.transactions.get_statistics_workflow_status")
+@patch("routes.transactions.check_failed_or_pending_tasks")
 @patch("statistic.tasks.processing.calculate_statistics_for_all_dates.s")
 @pytest.mark.asyncio
 async def test_can_get_statistics_result(
     mocked_celery_task,
-    mocked_statistics_result,
-    _,
+    mocked_task_checker,
+    mocked_async_result,
     overridden_dependency: AsyncGenerator,
     async_client: AsyncClient,
 ) -> None:
@@ -123,25 +123,27 @@ async def test_can_get_statistics_result(
         "transactions_count": 0,
         "not_rollbacked_transactions_count": 0,
     }
-
     mock_async_result.id = "mocked_task_id"
     mocked_celery_task.return_value.apply_async.return_value = (
         mock_async_result
     )
+    mocked_task_checker.return_value = None
+    mocked_async_result.get.return_value = statistics_response
+
     response = await async_client.get(
         url="/transactions/analysis/period/1",
         timeout=5,
     )
     response_data: Dict = response.json()
     task_id: str = response_data["task_id"]
-    mocked_statistics_result.return_value = statistics_response
     response = await async_client.get(
         url=f"/transactions/analysis/status/{task_id}",
         timeout=5,
     )
     response_data: List[Dict] = response.json()
+
     for item in response_data:
-        check_statistics_response_assertation(
+        assert_statistics_response(
             response_data=item,
             start_date="2023-01-01",
             end_date="2023-01-31",

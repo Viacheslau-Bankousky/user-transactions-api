@@ -11,7 +11,7 @@ from models.enums import (
     TransactionPurposeEnum,
     TransactionStatusEnum,
 )
-from tests.utils.assert_checkers import check_transaction_response_assertation
+from tests.utils.assert_checkers import assert_transaction_response
 
 
 @pytest.mark.asyncio
@@ -30,7 +30,7 @@ async def test_can_get_all_transactions(
 
     assert response.status_code == status.HTTP_200_OK
     for index, transaction in enumerate(response_data):
-        check_transaction_response_assertation(
+        assert_transaction_response(
             response_data=transaction,
             expected_status=TransactionStatusEnum.PROCESSED,
             expected_amount=expected_amount,
@@ -55,7 +55,7 @@ async def test_can_get_transactions_by_user_id(
     response_data: List[Dict] = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_transaction_response_assertation(
+    assert_transaction_response(
         response_data=response_data[0],
         expected_status=TransactionStatusEnum.PROCESSED,
         expected_amount=expected_amount,
@@ -100,7 +100,7 @@ async def test_can_get_processed_transactions(
 
     assert response.status_code == status.HTTP_200_OK
     for index, transaction in enumerate(response_data):
-        check_transaction_response_assertation(
+        assert_transaction_response(
             response_data=transaction,
             expected_status=TransactionStatusEnum.PROCESSED,
             expected_amount=expected_amount,
@@ -129,7 +129,7 @@ async def test_can_get_rollbacked_transactions(
     response_data: List[Dict] = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_transaction_response_assertation(
+    assert_transaction_response(
         response_data=response_data[0],
         expected_status=TransactionStatusEnum.ROLL_BACKED,
         expected_amount=expected_amount,
@@ -173,7 +173,7 @@ async def test_can_get_transactions_by_user_id_and_status(
     response_data: List[Dict] = response.json()
 
     assert response.status_code == status.HTTP_200_OK
-    check_transaction_response_assertation(
+    assert_transaction_response(
         response_data=response_data[0],
         expected_status=TransactionStatusEnum.PROCESSED,
         expected_amount=expected_amount,
