@@ -379,7 +379,7 @@ async def get_transaction_analysis(weeks_count: int) -> Dict[str, str]:
             for tracking the task status.
     """
     app_logger.info(
-        "Received GET request for /transactions/analysis/period" " endpoint"
+        "Received GET request for /transactions/analysis/period endpoint"
     )
     check_weeks_count(weeks_count=weeks_count)
     date_ranges: List[tuple[date, date]] = generate_date_ranges(
