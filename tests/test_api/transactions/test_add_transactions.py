@@ -1,3 +1,40 @@
+"""
+Module for Testing Transaction Addition in Different Scenarios.
+
+This module contains test cases that validate the behavior of
+transaction-related API endpoints when adding refund or deduction
+transactions under various scenarios. It ensures that the correct
+HTTP responses, error codes, and messages are returned, depending
+on the input parameters and conditions.
+
+Key Features:
+- **Happy Paths**:
+  - Tests successful addition of refund and deduction transactions.
+- **Negative Scenarios**:
+  - Tests adding transactions with invalid user IDs.
+  - Verifies correct handling when the user is blocked.
+  - Tests transactions with invalid or missing parameters (e.g., negative
+    amounts, invalid currencies, missing fields).
+  - Confirms errors for users with insufficient balance.
+
+Dependencies:
+- `pytest`: For writing and running test cases.
+- `pytest.mark.asyncio`: For asynchronous tests.
+- `pytest.mark.parametrize`: For parameterizing test cases.
+- `fastapi.status`: For HTTP status codes.
+- `httpx.AsyncClient`: For making HTTP requests to the test server.
+- `core.constants.NOTHING_WAS_FOUND_MESSAGE`: To assert appropriate
+ error messages.
+- `models.enums`: Enumerations for transaction properties
+(e.g., currency, purpose, status).
+- `tests.utils.assert_checkers.assert_transaction_response`:
+    Helper function for asserting expected response fields.
+
+Examples:
+Each test simulates an API request to add a transaction, either succeeding
+ or failing as the scenario dictates.
+"""
+
 from decimal import Decimal
 from typing import Any, AsyncGenerator, Dict
 
@@ -18,6 +55,19 @@ from tests.utils.assert_checkers import assert_transaction_response
 async def test_can_add_refund_transaction(
     overridden_dependency: AsyncGenerator, async_client: AsyncClient
 ) -> None:
+    """
+    Test successfully adding a refund transaction.
+
+    This test verifies that a refund transaction can be added for a valid user
+    and that the response contains the expected values for the processed
+    transaction.
+
+    Args:
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": 1000,
@@ -47,6 +97,19 @@ async def test_can_add_refund_transaction(
 async def test_can_add_deduct_transaction(
     overridden_dependency: AsyncGenerator, async_client: AsyncClient
 ) -> None:
+    """
+    Test successfully adding a deduct transaction.
+
+    This test verifies that a deduction (withdrawal) transaction can be added
+    for a valid user and checks the response for expected details.
+
+    Args:
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        async_client (AsyncClient): An asynchronous HTTP client for
+            sending requests.
+
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": 500,
@@ -92,6 +155,21 @@ async def test_can_not_add_transaction_with_wrong_user_id(
     route: str,
     purpose: TransactionPurposeEnum,
 ) -> None:
+    """
+    Test adding a transaction for a nonexistent user.
+
+    This test verifies that the API returns a 404 response when attempting to
+    add a refund or deduction transaction for a user ID that does not exist.
+
+    Args:
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+        route (str): API endpoint for the transaction request.
+        purpose (TransactionPurposeEnum): Type of transaction
+            (e.g., REFUND, WITHDRAWAL).
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": 200,
@@ -129,6 +207,21 @@ async def test_can_not_add_transaction_to_blocked_user(
     route: str,
     purpose: TransactionPurposeEnum,
 ) -> None:
+    """
+    Test adding a transaction for a blocked user.
+
+    This test verifies that the API returns a 403 response when attempting to
+    add a refund or deduction transaction for a user who is blocked.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        route (str): API endpoint for the transaction request.
+        purpose (TransactionPurposeEnum): Type of transaction
+            (e.g., REFUND, WITHDRAWAL).
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": 200,
@@ -167,6 +260,22 @@ async def test_can_not_add_transaction_with_negative_amount(
     route: str,
     purpose: TransactionPurposeEnum,
 ) -> None:
+    """
+    Test adding a transaction with a negative amount.
+
+    This test validates that the API rejects requests containing
+    a negative or zero transaction amount. The proper error message
+    is asserted in the response.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for
+            sending requests.
+        overridden_dependency (AsyncGenerator): A testing dependency
+            for mocking or overriding.
+        route (str): API endpoint for the transaction request.
+        purpose (TransactionPurposeEnum): Type of transaction
+            (e.g., REFUND, WITHDRAWAL).
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": -1,
@@ -205,6 +314,21 @@ async def test_can_not_add_transaction_without_amount(
     route: str,
     purpose: TransactionPurposeEnum,
 ) -> None:
+    """
+    Test adding a transaction without specifying an amount.
+
+    This test verifies that the API rejects requests where the transaction
+    amount is missing and returns the appropriate error message.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        route (str): API endpoint for the transaction request.
+        purpose (TransactionPurposeEnum): Type of transaction
+            (e.g., REFUND, WITHDRAWAL).
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "purpose": purpose,
@@ -242,6 +366,21 @@ async def test_can_not_add_transaction_without_currency(
     route: str,
     purpose: TransactionPurposeEnum,
 ) -> None:
+    """
+    Test adding a transaction without specifying a currency.
+
+    This test ensures that requests missing the `currency` field are
+    rejected by the API with the appropriate validation error message.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for
+            sending requests.
+        overridden_dependency (AsyncGenerator): A testing dependency
+            for mocking or overriding.
+        route (str): API endpoint for the transaction request.
+        purpose (TransactionPurposeEnum): Type of transaction
+            (e.g., REFUND, WITHDRAWAL).
+    """
     request_data: Dict[str, Any] = {
         "amount": 500,
         "purpose": purpose,
@@ -279,6 +418,21 @@ async def test_can_not_add_transaction_with_wrong_currency(
     route: str,
     purpose: TransactionPurposeEnum,
 ) -> None:
+    """
+    Test adding a transaction with an invalid currency.
+
+    This test validates that the API rejects requests with unsupported
+    `currency` values and returns the appropriate validation error message.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        route (str): API endpoint for the transaction request.
+        purpose (TransactionPurposeEnum): Type of transaction
+            (e.g., REFUND, WITHDRAWAL).
+    """
     request_data: Dict[str, Any] = {
         "currency": "wrong_currency",
         "amount": 500,
@@ -313,6 +467,19 @@ async def test_can_not_add_transaction_without_purpose(
     overridden_dependency: AsyncGenerator,
     route: str,
 ) -> None:
+    """
+    Test adding a transaction without specifying a purpose.
+
+    This test ensures that requests missing the `purpose` field are rejected
+    by the API and the appropriate validation error is returned.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        route (str): API endpoint for the transaction request.
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": 500,
@@ -343,6 +510,19 @@ async def test_can_not_add_transaction_with_wrong_purpose(
     overridden_dependency: AsyncGenerator,
     route: str,
 ) -> None:
+    """
+    Test adding a transaction with an invalid purpose.
+
+    This test validates that the API rejects transactions with unsupported
+    `purpose` values and returns the appropriate validation error message.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+        route (str): API endpoint for the transaction request.
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": 500,
@@ -366,6 +546,18 @@ async def test_can_not_add_deduct_transaction_to_empty_balance(
     async_client: AsyncClient,
     overridden_dependency: AsyncGenerator,
 ) -> None:
+    """
+    Test adding a debit transaction to a user with an insufficient balance.
+
+    This test ensures that the API rejects requests to deduct amounts when the
+    user's balance is insufficient to cover the transaction.
+
+    Args:
+        async_client (AsyncClient): An asynchronous HTTP client for sending
+            requests.
+        overridden_dependency (AsyncGenerator): A testing dependency for
+            mocking or overriding.
+    """
     request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
         "amount": 500,

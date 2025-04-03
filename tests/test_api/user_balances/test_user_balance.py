@@ -1,3 +1,34 @@
+"""
+Module for Testing User Balance Updates via Transactions.
+
+This module contains test cases designed to validate the correct behavior
+of user balance updates when transactions are created, deducted, and rolled
+back.
+
+Key Features:
+- **Balance Increases**:
+  - Verify that user balances are correctly increased after refund
+   transactions.
+- **Balance Decreases**:
+  - Ensure user balances are decreased correctly after deduct (withdrawal)
+   transactions.
+- **Balance Restoration**:
+  - Validate that balances are restored correctly after rolling back
+   transactions.
+
+Dependencies:
+- `pytest`: For defining and running the test cases.
+- `pytest.mark.asyncio`: For executing asynchronous test functions.
+- `httpx.AsyncClient`: For making HTTP requests to simulate user
+transactions.
+- `models.enums`: Enumerations for transaction attributes like currency
+ and purpose.
+- `models.users.UserBalance`: Represents the user's balance, used for
+ verification.
+- `repositories.users_balances.get_user_balance_for_currency`: Function
+ to fetch user balance for a given currency.
+"""
+
 from decimal import Decimal
 from typing import Any, AsyncGenerator, Dict
 
@@ -18,7 +49,23 @@ async def test_can_increase_balance_after_refund_transaction(
     overridden_dependency: AsyncGenerator,
     initial_user_balance: UserBalance,
     async_db_session: AsyncGenerator,
-):
+) -> None:
+    """
+    Test balance increase after a refund transaction.
+
+    Verifies that the user's balance is increased correctly when a refund
+    transaction is created for a specific currency.
+
+    Args:
+        async_client (AsyncClient): Asynchronous HTTP client for making
+            API requests.
+        overridden_dependency (AsyncGenerator): Dependency injection
+            to mock services.
+        initial_user_balance (UserBalance): The user's balance before
+            the transaction.
+        async_db_session (AsyncGenerator): Database session for querying
+            user balances.
+    """
     initial_balance: Decimal = Decimal(0)
     increased_balance: Decimal = Decimal(500)
     user_id: int = 2
@@ -47,8 +94,25 @@ async def test_can_decrease_balance_after_deduct_transaction(
     overridden_dependency: AsyncGenerator,
     initial_user_balance: UserBalance,
     async_db_session: AsyncGenerator,
-):
-    initial_balance = decreased_balance = Decimal(0)
+) -> None:
+    """
+    Test balance decrease after a deduct (withdrawal) transaction.
+
+    Simulates a refund to increase the initial balance, followed by a deduct
+    transaction to verify balance decrease to its initial value.
+
+    Args:
+        async_client (AsyncClient): Asynchronous HTTP client for making API
+            requests.
+        overridden_dependency (AsyncGenerator): Dependency injection to mock
+            services.
+        initial_user_balance (UserBalance): The user's balance before the
+            transactions.
+        async_db_session (AsyncGenerator): Database session for querying
+            user balances.
+    """
+    initial_balance: Decimal = Decimal(0)
+    decreased_balance: Decimal = Decimal(0)
     user_id: int = 2
     refund_request_data: Dict[str, Any] = {
         "currency": CurrencyEnum.USD,
@@ -93,7 +157,25 @@ async def test_can_restore_balance_after_rollback_transaction(
     initial_user_balance: UserBalance,
     async_db_session: AsyncGenerator,
     transaction_purpose: TransactionPurposeEnum,
-):
+) -> None:
+    """
+    Test restoring balance after a transaction rollback.
+
+    Validates that the user's balance is restored to its original value
+    when a transaction, either refund or withdrawal, is rolled back.
+
+    Args:
+        async_client (AsyncClient): Asynchronous HTTP client for making API
+            requests.
+        overridden_dependency (AsyncGenerator): Dependency injection to mock
+            services.
+        initial_user_balance (UserBalance): The user's balance before the
+            transactions.
+        async_db_session (AsyncGenerator): Database session for querying
+            user balances.
+        transaction_purpose (TransactionPurposeEnum): Type of transaction
+            (REFUND or WITHDRAWAL).
+    """
     balance: Decimal = Decimal(0)
     user_id: int = 1
     request_data: Dict[str, Any] = {
