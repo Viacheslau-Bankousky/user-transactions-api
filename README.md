@@ -1,4 +1,4 @@
-# FastAPI Project: User Management, Authentication & Transactions
+# User Management, Authentication & Transactions
 
 ## Project Description
 
